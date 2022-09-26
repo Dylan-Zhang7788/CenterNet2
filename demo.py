@@ -41,15 +41,16 @@ def get_parser():
     parser = argparse.ArgumentParser(description="Detectron2 demo for builtin models")
     parser.add_argument(
         "--config-file",
-        default="configs/quick_schedules/mask_rcnn_R_50_FPN_inference_acc_test.yaml",
+        default="configs/CenterNet2_R50_1x.yaml",
         metavar="FILE",
         help="path to config file",
     )
     parser.add_argument("--webcam", action="store_true", help="Take inputs from webcam.")
     parser.add_argument("--video-input", help="Path to video file.")
-    parser.add_argument("--input", nargs="+", help="A list of space separated input images")
+    parser.add_argument("--input", nargs="+", default=['./img/'],help="A list of space separated input images")
     parser.add_argument(
         "--output",
+        # default="./output/",
         help="A file or directory to save output visualizations. "
         "If not given, will show output in an OpenCV window.",
     )
@@ -63,7 +64,7 @@ def get_parser():
     parser.add_argument(
         "--opts",
         help="Modify config options using the command-line 'KEY VALUE' pairs",
-        default=[],
+        default=['MODEL.WEIGHTS' ,'models/CenterNet2_R50_1x.pth'],
         nargs=argparse.REMAINDER,
     )
     return parser
@@ -134,7 +135,7 @@ if __name__ == "__main__":
             else:
                 # cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
                 cv2.imshow(WINDOW_NAME, visualized_output.get_image()[:, :, ::-1])
-                if cv2.waitKey(1 ) == 27:
+                if cv2.waitKey(0) == 27:
                     break  # esc to quit
     elif args.webcam:
         assert args.input is None, "Cannot have both --input and --webcam!"
@@ -142,7 +143,7 @@ if __name__ == "__main__":
         for vis in tqdm.tqdm(demo.run_on_video(cam)):
             cv2.namedWindow(WINDOW_NAME, cv2.WINDOW_NORMAL)
             cv2.imshow(WINDOW_NAME, vis)
-            if cv2.waitKey(1) == 27:
+            if cv2.waitKey(0) == 27:
                 break  # esc to quit
         cv2.destroyAllWindows()
     elif args.video_input:
@@ -176,7 +177,7 @@ if __name__ == "__main__":
 
             cv2.namedWindow(basename, cv2.WINDOW_NORMAL)
             cv2.imshow(basename, vis_frame)
-            if cv2.waitKey(1) == 27:
+            if cv2.waitKey(0) == 27:
                 break  # esc to quit
         video.release()
         if args.output:
