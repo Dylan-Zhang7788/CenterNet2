@@ -1,6 +1,16 @@
-#!/usr/bin/env python
 # Copyright (c) Facebook, Inc. and its affiliates.
 """
+一个主要的训练脚本.
+
+此脚本读取给定的配置文件并运行训练或评估. 这是在detectron2中训练标准模型的入口点.
+
+为了让一个脚本支持多个模型的训练,
+此脚本包含特定于这些内置模型的逻辑,因此可能不适合您自己的项目.
+例如,您的研究项目可能只需要一个“评估者”.
+
+因此,我们建议您使用detectron2 作为库并取此文件作为如何使用该库的示例.
+您可能希望使用数据集和其他自定义项编写自己的脚本.
+
 A main training script.
 
 This scripts reads a given config file and runs the training or evaluation.
@@ -42,6 +52,11 @@ from detectron2.modeling import GeneralizedRCNNWithTTA
 
 def build_evaluator(cfg, dataset_name, output_folder=None):
     """
+    为给定的数据集创建评估器.
+    这使用了与每个内置数据集关联的特殊元数据 evaluator_type
+    对于您自己的数据集,你可以简单地在你的脚本中手动创建一个评估器,
+    不必担心这里的 hacky if-else 逻辑.
+
     Create evaluator(s) for a given dataset.
     This uses the special metadata "evaluator_type" associated with each builtin dataset.
     For your own dataset, you can simply create an evaluator manually in your
@@ -50,7 +65,11 @@ def build_evaluator(cfg, dataset_name, output_folder=None):
     if output_folder is None:
         output_folder = os.path.join(cfg.OUTPUT_DIR, "inference")
     evaluator_list = []
+    
+    # evaluator_type是在这里定义的
     evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
+
+    # 判断evaluator_type的类型，根据evaluator_type的类型向evaluator_list里添加东西
     if evaluator_type in ["sem_seg", "coco_panoptic_seg"]:
         evaluator_list.append(
             SemSegEvaluator(
@@ -77,6 +96,8 @@ def build_evaluator(cfg, dataset_name, output_folder=None):
         return PascalVOCDetectionEvaluator(dataset_name)
     elif evaluator_type == "lvis":
         return LVISEvaluator(dataset_name, output_dir=output_folder)
+    
+    # 判断evaluator_list的长度，然后返回不同的值
     if len(evaluator_list) == 0:
         raise NotImplementedError(
             "no Evaluator for the dataset {} with the type {}".format(dataset_name, evaluator_type)
@@ -88,6 +109,10 @@ def build_evaluator(cfg, dataset_name, output_folder=None):
 
 class Trainer(DefaultTrainer):
     """
+    我们使用"DefaultTrainer"其中包含用于标准训练工作流程的预定义默认逻辑. 
+    它们可能不适合你,特别是如果你正在从事一个新的研究项目.
+    在这种情况下，您可以编写自己的训练循环。 您可以使用“tools/plain_train_net.py”作为示例
+    
     We use the "DefaultTrainer" which contains pre-defined default logic for
     standard training workflow. They may not work for you, especially if you
     are working on a new research project. In that case you can write your
