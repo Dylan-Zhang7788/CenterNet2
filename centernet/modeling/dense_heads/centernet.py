@@ -817,7 +817,10 @@ class CenterNet(nn.Module):
 
             strides = strides_default.view(1, L, 1).expand(n, L, 2) # 
             centers_inds = (centers / strides).long() # n x L x 2
-            center_grids = centers_inds * strides + strides // 2# n x L x 2
+
+            # 这里有修改 原本的被注释了
+            # center_grids = centers_inds * strides + strides // 2  # n x L x 2
+            center_grids = centers_inds * strides + torch.div(strides,2,rounding_mode='trunc') # n x L x 2
             l = center_grids[:, :, 0] - bboxes[:, 0].view(n, 1).expand(n, L)
             t = center_grids[:, :, 1] - bboxes[:, 1].view(n, 1).expand(n, L)
             r = bboxes[:, 2].view(n, 1).expand(n, L) - center_grids[:, :, 0]

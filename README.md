@@ -1,9 +1,14 @@
+# 说明
+
+CenterNet2 作者原代码 
+
+运行环境为乌班图 CUDA 10.2 python 3.7 pytorch 1.10.1
+
+直接运行 install.sh 安装环境
+
 # 我的改动
 
 修改了demo中的默认参数，运行demo直接跑就行了，会把img里的图片依次检测，然后显示出来。如果想要存储或者对视频，相机中图像进行检测，修改相关的默认参数，[GETTING_STARTED.md](https://github.com/facebookresearch/detectron2/blob/master/GETTING_STARTED.md)里面有写的
-
-
-
 
 # Probabilistic two-stage detection
 Two-stage object detectors that use class-agnostic one-stage detectors as the proposal network.
