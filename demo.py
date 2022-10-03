@@ -41,7 +41,7 @@ def get_parser():
     parser = argparse.ArgumentParser(description="Detectron2 demo for builtin models")
     parser.add_argument(
         "--config-file",
-        default="configs/CenterNet2_R50_1x.yaml",
+        default="./configs/CenterNet2_R50_1x.yaml",
         metavar="FILE",
         help="path to config file",
     )
