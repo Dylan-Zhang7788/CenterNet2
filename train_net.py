@@ -1,6 +1,7 @@
 import logging
 import os
 from collections import OrderedDict
+from pickle import TRUE
 import torch
 from torch.nn.parallel import DistributedDataParallel
 import time
@@ -68,20 +69,24 @@ def do_test(cfg, model):
         results = list(results.values())[0]
     return results
 
-def do_train(cfg, model, resume=False):
+def do_train(cfg, model, resume=True):
     model.train()
     optimizer = build_optimizer(cfg, model)
     scheduler = build_lr_scheduler(cfg, optimizer)
-
+    
+    # 加载一下checkpoint
     checkpointer = DetectionCheckpointer(
         model, cfg.OUTPUT_DIR, optimizer=optimizer, scheduler=scheduler
     )
 
+    #设置开始的iter数
     start_iter = (
         checkpointer.resume_or_load(
             cfg.MODEL.WEIGHTS, resume=resume,
             ).get("iteration", -1) + 1
     )
+
+    # 如果重置了iter数
     if cfg.SOLVER.RESET_ITER:
         logger.info('Reset loaded iteration. Start training from iteration 0.')
         start_iter = 0
@@ -166,29 +171,29 @@ def do_train(cfg, model, resume=False):
             "Total training time: {}".format(
                 str(datetime.timedelta(seconds=int(total_time)))))
 
-def setup(args):
+def setup(args):  # 根据arg得到cfg的一个函数
     """
     Create configs and perform basic setups.
     """
-    cfg = get_cfg()
-    add_centernet_config(cfg)
-    cfg.merge_from_file(args.config_file)
-    cfg.merge_from_list(args.opts)
+    cfg = get_cfg()   # 加载默认的config 
+    add_centernet_config(cfg)   # 添加centernet的config
+    cfg.merge_from_file(args.config_file)  # 从config_file里合并一部分参数进来
+    cfg.merge_from_list(args.opts)  # 自己设置的参数 再通过opt合并进来
     if '/auto' in cfg.OUTPUT_DIR:
         file_name = os.path.basename(args.config_file)[:-5]
         cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
         logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
-    cfg.freeze()
-    default_setup(cfg, args)
-    return cfg
+    cfg.freeze()   # 冻结参数
+    default_setup(cfg, args) # 初始化一下
+    return cfg 
 
 
 def main(args):
-    cfg = setup(args)
+    cfg = setup(args) # 前头定义的函数
 
-    model = build_model(cfg)
-    logger.info("Model:\n{}".format(model))
-    if args.eval_only:
+    model = build_model(cfg)  # modeling.meta_arch.build.py
+    logger.info("Model:\n{}".format(model))  # 记录信息的
+    if args.eval_only:  # 如果只用于测试
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
         )
@@ -205,22 +210,24 @@ def main(args):
             find_unused_parameters=True
         )
 
-    do_train(cfg, model, resume=args.resume)
+    do_train(cfg, model, resume=args.resume)  # 上头定义的
     return do_test(cfg, model)
 
 
 if __name__ == "__main__":
-    args = default_argument_parser()
-    args.add_argument('--manual_device', default='')
-    args = args.parse_args()
+    args = default_argument_parser() # engine.default.py
+    args.add_argument('--manual_device', default='') # python 
+    args = args.parse_args() #python 
     if args.manual_device != '':
-        os.environ['CUDA_VISIBLE_DEVICES'] = args.manual_device
+        os.environ['CUDA_VISIBLE_DEVICES'] = args.manual_device  # 指定训练的显卡
     args.dist_url = 'tcp://127.0.0.1:{}'.format(
-        torch.randint(11111, 60000, (1,))[0].item())
-    print("Command Line Args:", args)
+        torch.randint(11111, 60000, (1,))[0].item())   # 分布式训练的什么东西 不懂
+    print("Command Line Args:", args)    # engine.launch 第一个是函数，后面全是参数
     launch(
         main,
-        args.num_gpus,
+        # 后面的这些参数全都在 default_argument_parser() 里头定义的 
+        # 要改可以 args.xxx=xxx 就行了
+        args.num_gpus,        
         num_machines=args.num_machines,
         machine_rank=args.machine_rank,
         dist_url=args.dist_url,
