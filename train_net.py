@@ -7,6 +7,8 @@ from torch.nn.parallel import DistributedDataParallel
 import time
 import datetime
 import json
+import argparse
+import sys
 
 from fvcore.common.timer import Timer
 import detectron2.utils.comm as comm
@@ -16,7 +18,7 @@ from detectron2.data import (
     MetadataCatalog,
     build_detection_test_loader,
 )
-from detectron2.engine import default_argument_parser, default_setup, launch
+from detectron2.engine import default_setup, launch
 
 from detectron2.evaluation import (
     COCOEvaluator,
@@ -41,17 +43,56 @@ from centernet.data.custom_build_augmentation import build_custom_augmentation
 
 logger = logging.getLogger("detectron2")
 
+def default_argument_parser(epilog=None):
+    parser = argparse.ArgumentParser(
+        epilog=epilog,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--config-file", default="./configs/CenterNet2_R50_1x.yaml", metavar="FILE", help="path to config file")
+    parser.add_argument(
+        "--resume",
+        action="store_true",
+        help="Whether to attempt to resume from the checkpoint directory. "
+        "See documentation of `DefaultTrainer.resume_or_load()` for what it means.",
+    )
+    parser.add_argument("--eval-only", action="store_true", help="perform evaluation only")
+    parser.add_argument("--num-gpus", type=int, default=1, help="number of gpus *per machine*")
+    parser.add_argument("--num-machines", type=int, default=1, help="total number of machines")
+    parser.add_argument(
+        "--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)"
+    )
+
+    port = 2**15 + 2**14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
+    parser.add_argument(
+        "--dist-url",
+        default="tcp://127.0.0.1:{}".format(port),
+        help="initialization URL for pytorch distributed backend. See "
+        "https://pytorch.org/docs/stable/distributed.html for details.",
+    )
+    parser.add_argument(
+        "opts",
+        default=None,
+        nargs=argparse.REMAINDER,
+    )
+    return parser
+
+
 def do_test(cfg, model):
+    # OrderedDict()是一个有序的词典，Python里的函数
     results = OrderedDict()
+
+    # 进行数据集的转化
     for dataset_name in cfg.DATASETS.TEST:
         mapper = None if cfg.INPUT.TEST_INPUT_TYPE == 'default' else \
             DatasetMapper(
                 cfg, False, augmentations=build_custom_augmentation(cfg, False))
+        
+        # 加载数据集
         data_loader = build_detection_test_loader(cfg, dataset_name, mapper=mapper)
         output_folder = os.path.join(
             cfg.OUTPUT_DIR, "inference_{}".format(dataset_name))
+        # 确定评估数据集的类型 lvis或者coco
         evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
-
         if evaluator_type == "lvis":
             evaluator = LVISEvaluator(dataset_name, cfg, True, output_folder)
         elif evaluator_type == 'coco':
@@ -71,8 +112,8 @@ def do_test(cfg, model):
 
 def do_train(cfg, model, resume=True):
     model.train()
-    optimizer = build_optimizer(cfg, model)
-    scheduler = build_lr_scheduler(cfg, optimizer)
+    optimizer = build_optimizer(cfg, model)   # solver.build.py
+    scheduler = build_lr_scheduler(cfg, optimizer)  # solver.build.py
     
     # 加载一下checkpoint
     checkpointer = DetectionCheckpointer(
@@ -92,24 +133,28 @@ def do_train(cfg, model, resume=True):
         start_iter = 0
     max_iter = cfg.SOLVER.MAX_ITER if cfg.SOLVER.TRAIN_ITER < 0 else cfg.SOLVER.TRAIN_ITER
 
+    # fvcore中的类，用来每一个period存储checkpoint的
     periodic_checkpointer = PeriodicCheckpointer(
         checkpointer, cfg.SOLVER.CHECKPOINT_PERIOD, max_iter=max_iter
     )
 
     writers = (
         [
-            CommonMetricPrinter(max_iter),
-            JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json")),
+            CommonMetricPrinter(max_iter), # utils.event.py 用来把指标打印到终端的一个东西
+            JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json")),  # utils.event.py 把指标写进json
             TensorboardXWriter(cfg.OUTPUT_DIR),
         ]
         if comm.is_main_process()
         else []
     )
 
-
+    # data.dataset_mapper.py 用来读入数据集，并且完成数据集的裁剪，变形等数据增强工作的
+    # build_custom_augmentation是在centernet.data.custom_build_augmentation.py，应该是作者自己写的
+    # detectron2里没有这个东西
     mapper = DatasetMapper(cfg, True) if cfg.INPUT.CUSTOM_AUG == '' else \
-        DatasetMapper(cfg, True, augmentations=build_custom_augmentation(cfg, True))
+        DatasetMapper(cfg, True, augmentations=build_custom_augmentation(cfg, True))  
     if cfg.DATALOADER.SAMPLER_TRAIN in ['TrainingSampler', 'RepeatFactorTrainingSampler']:
+    # build_detection_train_loader 是在detectron2 的 data.build.py 里定义的
         data_loader = build_detection_train_loader(cfg, mapper=mapper)
     else:
         from centernet.data.custom_dataset_dataloader import  build_custom_train_loader
@@ -117,10 +162,14 @@ def do_train(cfg, model, resume=True):
 
 
     logger.info("Starting training from iteration {}".format(start_iter))
+    # EventStorage 是 detectron2.utils.events.py里面定义的
+    # 用来存储训练过程中的指标的
     with EventStorage(start_iter) as storage:
         step_timer = Timer()
         data_timer = Timer()
         start_time = time.perf_counter()
+        
+        # 训练一个Batch就是一次Iteration
         for data, iteration in zip(data_loader, range(start_iter, max_iter)):
             data_time = data_timer.seconds()
             storage.put_scalars(data_time=data_time)
@@ -128,7 +177,10 @@ def do_train(cfg, model, resume=True):
             iteration = iteration + 1
             storage.step()
             loss_dict = model(data)
-
+            
+            # loss_dict 是model计算得到的
+            # losses是反向传播用的
+            # 后面计算的这些都是显示用的
             losses = sum(
                 loss for k, loss in loss_dict.items())
             assert torch.isfinite(losses).all(), loss_dict
@@ -139,7 +191,8 @@ def do_train(cfg, model, resume=True):
             if comm.is_main_process():
                 storage.put_scalars(
                     total_loss=losses_reduced, **loss_dict_reduced)
-
+            
+            # 反向传播
             optimizer.zero_grad()
             losses.backward()
             optimizer.step()
@@ -150,7 +203,7 @@ def do_train(cfg, model, resume=True):
             step_time = step_timer.seconds()
             storage.put_scalars(time=step_time)
             data_timer.reset()
-            scheduler.step()
+            scheduler.step()  # 调整lr的一个东西
 
             if (
                 cfg.TEST.EVAL_PERIOD > 0
@@ -158,6 +211,8 @@ def do_train(cfg, model, resume=True):
                 and iteration != max_iter
             ):
                 do_test(cfg, model)
+                # 定义在detectron2.utils.common.py 里的函数
+                # 当使用分布式训练时，在所有进程之间进行同步（屏蔽）的辅助函数
                 comm.synchronize()
 
             if iteration - start_iter > 5 and \
@@ -166,6 +221,7 @@ def do_train(cfg, model, resume=True):
                     writer.write()
             periodic_checkpointer.step(iteration)
 
+        # 最后记录一下整体的用时
         total_time = time.perf_counter() - start_time
         logger.info(
             "Total training time: {}".format(
@@ -201,7 +257,7 @@ def main(args):
             logger.info("Running inference with test-time augmentation ...")
             model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
 
-        return do_test(cfg, model)
+        return do_test(cfg, model)  # 如果eval_only=true 那么直接返回do_test
 
     distributed = comm.get_world_size() > 1
     if distributed:
