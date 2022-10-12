@@ -29,12 +29,12 @@ def parse_args(in_args=None):
     parser.add_argument(
         "--source",
         choices=["annotation", "dataloader"],
-        required=True,
+        default="annotation",
         help="visualize the annotations or the data loader (with pre-processing)",
     )
-    parser.add_argument("--config-file", metavar="FILE", help="path to config file")
-    parser.add_argument("--output-dir", default="./", help="path to output directory")
-    parser.add_argument("--show", action="store_true", help="show output in a window")
+    parser.add_argument("--config-file", metavar="FILE", help="path to config file",default="/home/zhangdi/zhangdi_ws/detectron2/configs/COCO-InstanceSegmentation/mask_rcnn_R_50_C4_1x.yaml")
+    parser.add_argument("--output-dir", default="/home/zhangdi/zhangdi_ws/CenterNet2/view_dataset", help="path to output directory")
+    parser.add_argument("--show", default=True, action="store_true", help="show output in a window")
     parser.add_argument(
         "opts",
         help="Modify config options using the command-line",
