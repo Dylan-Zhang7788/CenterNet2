@@ -47,10 +47,10 @@ def get_parser():
     )
     parser.add_argument("--webcam", action="store_true", help="Take inputs from webcam.")
     parser.add_argument("--video-input", help="Path to video file.")
-    parser.add_argument("--input", nargs="+", default=['./img/'],help="A list of space separated input images")
+    parser.add_argument("--input", nargs="+", default=['/home/zhangdi/zhangdi_ws/CenterNet2/datasets/balloon/val/'],help="A list of space separated input images")
     parser.add_argument(
         "--output",
-        # default="./output/",
+        default="./output/",
         help="A file or directory to save output visualizations. "
         "If not given, will show output in an OpenCV window.",
     )
@@ -58,13 +58,13 @@ def get_parser():
     parser.add_argument(
         "--confidence-threshold",
         type=float,
-        default=0.3,
+        default=0.7,
         help="Minimum score for instance predictions to be shown",
     )
     parser.add_argument(
         "--opts",
         help="Modify config options using the command-line 'KEY VALUE' pairs",
-        default=['MODEL.WEIGHTS' ,'models/CenterNet2_R50_1x.pth'],
+        default=['MODEL.WEIGHTS' ,'/home/zhangdi/zhangdi_ws/CenterNet2/models/CenterNet2_R50_1x.pth'],
         nargs=argparse.REMAINDER,
     )
     return parser
