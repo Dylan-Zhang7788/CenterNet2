@@ -55,7 +55,7 @@ def default_argument_parser(epilog=None):
         help="Whether to attempt to resume from the checkpoint directory. "
         "See documentation of `DefaultTrainer.resume_or_load()` for what it means.",
     )
-    parser.add_argument("--eval-only", action="store_true", help="perform evaluation only")
+    parser.add_argument("--eval-only",action="store_true", help="perform evaluation only")
     parser.add_argument("--num-gpus", type=int, default=2, help="number of gpus *per machine*")
     parser.add_argument("--num-machines", type=int, default=1, help="total number of machines")
     parser.add_argument(
@@ -239,6 +239,7 @@ def setup(args):  # 根据arg得到cfg的一个函数
         file_name = os.path.basename(args.config_file)[:-5]
         cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
         logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
+    cfg.MODEL.WEIGHTS="/home/zhangdi/zhangdi_ws/CenterNet2/models/CenterNet2_R50_1x.pth"
     cfg.freeze()   # 冻结参数
     default_setup(cfg, args) # 初始化一下
     return cfg 
@@ -246,7 +247,6 @@ def setup(args):  # 根据arg得到cfg的一个函数
 
 def main(args):
     cfg = setup(args) # 前头定义的函数
-
     model = build_model(cfg)  # modeling.meta_arch.build.py
     logger.info("Model:\n{}".format(model))  # 记录信息的
     if args.eval_only:  # 如果只用于测试
