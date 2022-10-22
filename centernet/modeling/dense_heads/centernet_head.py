@@ -37,9 +37,13 @@ class CenterNetHead(nn.Module):
         super().__init__()
         self.num_classes = num_classes
         self.with_agn_hm = with_agn_hm
-        self.only_proposal = only_proposal
+        self.only_proposal = only_proposal 
         self.out_kernel = 3
 
+        # centernet2里
+        # self.only_proposal默认值是TRUE
+        # num_box_convs=4 num_share_convs=0
+        # use_deformable默认是false
         head_configs = {
             "cls": (num_cls_convs if not self.only_proposal else 0, \
                 use_deformable),
@@ -65,9 +69,11 @@ class CenterNetHead(nn.Module):
                 else:
                     conv_func = nn.Conv2d
                 tower.append(conv_func(
+                    # 不太理解这个地方，不都是一个东西吗
+                    # 卷积核3 步长1 填充1 则大小不变
                         in_channels if i == 0 else channel,
                         channel, 
-                        kernel_size=3, stride=1,
+                        kernel_size=3, stride=1, 
                         padding=1, bias=True
                 ))
                 if norm == 'GN' and channel % 32 != 0:
@@ -103,7 +109,7 @@ class CenterNetHead(nn.Module):
         if self.with_agn_hm:
             self.agn_hm = nn.Conv2d(
                 in_channels, 1, kernel_size=self.out_kernel,
-                stride=1, padding=self.out_kernel // 2
+                stride=1, padding=self.out_kernel // 2 # //表示整除 例如7//2=3
             )
             torch.nn.init.constant_(self.agn_hm.bias, bias_value)
             torch.nn.init.normal_(self.agn_hm.weight, std=0.01)
@@ -139,22 +145,30 @@ class CenterNetHead(nn.Module):
         return ret
 
     def forward(self, x):
+        # x就是输入进来的特征图
         clss = []
         bbox_reg = []
         agn_hms = []
+        # share_tower cls_tower bbox_tower都是在init里生成的
+        # 都是conv(3*3 不改变大小与通道)+GN+ReLU
         for l, feature in enumerate(x):
             feature = self.share_tower(feature)
             cls_tower = self.cls_tower(feature)
             bbox_tower = self.bbox_tower(feature)
+            # clss是none
             if not self.only_proposal:
                 clss.append(self.cls_logits(cls_tower))
             else:
                 clss.append(None)
 
-            if self.with_agn_hm:
+            # 默认为TRUE
+            # self.agn_hms是卷积层 conv(3*3,步长1 填充1，通道变为1)
+            # 输出的agn_hms是特征图
+            if self.with_agn_hm: 
                 agn_hms.append(self.agn_hm(bbox_tower))
             else:
                 agn_hms.append(None)
+            # bbox_pred是卷积层 conv(3*3,步长1 填充1，通道变为1)
             reg = self.bbox_pred(bbox_tower)
             reg = self.scales[l](reg)
             bbox_reg.append(F.relu(reg))

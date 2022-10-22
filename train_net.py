@@ -247,6 +247,12 @@ def setup(args):  # 根据arg得到cfg的一个函数
 
 def main(args):
     cfg = setup(args) # 前头定义的函数
+    # MODEL.META_ARCHITECTURE = "GeneralizedRCNN"
+    # MODEL.DEVICE = "cuda"
+
+    # 这里调用了 META_ARCH_REGISTRY.get()(cfg)
+    # 并且使用了注册器，注册了"GeneralizedRCNN"
+    # "GeneralizedRCNN"这个类被写在
     model = build_model(cfg)  # modeling.meta_arch.build.py
     logger.info("Model:\n{}".format(model))  # 记录信息的
     if args.eval_only:  # 如果只用于测试

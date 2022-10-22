@@ -17,7 +17,8 @@ class LastLevelP6P7_P5(nn.Module):
     This module is used in RetinaNet to generate extra layers, P6 and P7 from
     C5 feature.
     """
-
+    # build_p67_resnet_fpn_backbone 里面
+    # in_channels, out_channels都是256 都等于cfg.MODEL.FPN.OUT_CHANNELS
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.num_levels = 2

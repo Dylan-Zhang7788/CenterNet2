@@ -132,6 +132,7 @@ class CenterNet(nn.Module):
 
     @classmethod
     def from_config(cls, cfg, input_shape):
+        # 跟RCNN里的from_config基本上是一样的
         ret = {
             # 'input_shape': input_shape,
             'in_channels': input_shape[
@@ -180,10 +181,16 @@ class CenterNet(nn.Module):
         return ret
 
 
+    # 这里的images，就是图像
+    # features_dict是由backbone输出的特征图，是字典{名字：特征图}，gt就是gt
     def forward(self, images, features_dict, gt_instances):
+        # 获取到的features 处理一下，self.in_features有默认值 p3-p7
         features = [features_dict[f] for f in self.in_features]
+        # 输入centernet_head里，不是ROIhead，是centernet_head
         clss_per_level, reg_pred_per_level, agn_hm_pred_per_level = \
             self.centernet_head(features)
+        # compute_grids 计算网格 输出的是 每个level上的一系列网格中心点
+        # 并且输出的是中心点的绝对坐标 笔记里有记
         grids = self.compute_grids(features)
         shapes_per_level = grids[0].new_tensor(
                     [(x.shape[2], x.shape[3]) for x in reg_pred_per_level])
@@ -322,6 +329,7 @@ class CenterNet(nn.Module):
         grids = []
         for level, feature in enumerate(features):
             h, w = feature.size()[-2:]
+            # 默认strides=(8, 16, 32, 64, 128)
             shifts_x = torch.arange(
                 0, w * self.strides[level], 
                 step=self.strides[level],
