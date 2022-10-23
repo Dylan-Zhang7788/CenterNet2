@@ -146,6 +146,7 @@ class CenterNetHead(nn.Module):
 
     def forward(self, x):
         # x就是输入进来的特征图
+        # x:list level个[batch,256(通道数),h,w]
         clss = []
         bbox_reg = []
         agn_hms = []
@@ -168,9 +169,11 @@ class CenterNetHead(nn.Module):
                 agn_hms.append(self.agn_hm(bbox_tower))
             else:
                 agn_hms.append(None)
-            # bbox_pred是卷积层 conv(3*3,步长1 填充1，通道变为1)
+            # bbox_pred是卷积层 conv(3*3,步长1 填充1，通道变为4)
             reg = self.bbox_pred(bbox_tower)
             reg = self.scales[l](reg)
             bbox_reg.append(F.relu(reg))
-        
+        # return的 clss是none bbox_reg与agn_hms都是与输入特征尺寸一样
+        # 二者都包括5张特征图 p2-p5
+        # bbox_reg为4通道，agn_hms为1通道
         return clss, bbox_reg, agn_hms

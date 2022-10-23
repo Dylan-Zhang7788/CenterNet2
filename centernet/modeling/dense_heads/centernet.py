@@ -190,8 +190,15 @@ class CenterNet(nn.Module):
         clss_per_level, reg_pred_per_level, agn_hm_pred_per_level = \
             self.centernet_head(features)
         # compute_grids 计算网格 输出的是 每个level上的一系列网格中心点
-        # 并且输出的是中心点的绝对坐标 笔记里有记
+        # 并且输出的是中心点的绝对坐标 笔记里有记的
+        # grids: list，level数个 [坐标组个数，2] 2表示x，y
+        # 注意 x，y 和 h，w不一样 前者是点，是一个数，后者是长度，是一堆的x,y
+        # 为什么grids的输出不涉及到尺寸 原因是坐标点的个数,就是特征图的h,w相乘,特征图里有多少点,这里就是多少点
         grids = self.compute_grids(features)
+
+        # reg_pred_per_level: list，level数个 [batch数,channel,h，w]
+        # 这样就得到了每个level的特征图尺寸
+        # 得到的 shapes_per_level 是[level数,2]
         shapes_per_level = grids[0].new_tensor(
                     [(x.shape[2], x.shape[3]) for x in reg_pred_per_level])
         
@@ -363,9 +370,10 @@ class CenterNet(nn.Module):
         '''
 
         # get positive pixel index
-        if not self.more_pos:
+        if not self.more_pos:# 这个东西的默认值是false
             pos_inds, labels = self._get_label_inds(
                 gt_instances, shapes_per_level) 
+                # shapes_per_level 是[level数,2]
         else:
             pos_inds, labels = None, None
         heatmap_channels = self.num_classes
@@ -453,45 +461,56 @@ class CenterNet(nn.Module):
         Inputs:
             gt_instances: [n_i], sum n_i = N
             shapes_per_level: L x 2 [(h_l, w_l)]_L
+            shapes_per_level 是[level数,2]
         Returns:
             pos_inds: N'
             labels: N'
         '''
         pos_inds = []
         labels = []
-        L = len(self.strides)
-        B = len(gt_instances)
-        shapes_per_level = shapes_per_level.long()
+        L = len(self.strides) # stride=(8,16,32,64,128) 所以L=5
+        B = len(gt_instances) # 这个就是batch_size
+        # 每个特征图的h和w
+        shapes_per_level = shapes_per_level.long() # 将数字转化为一个长整型
+        
+        # 长度为5的数组，记录每个level共有几个位置（计算面积）
         loc_per_level = (shapes_per_level[:, 0] * shapes_per_level[:, 1]).long() # L
         level_bases = []
         s = 0
         for l in range(L):
             level_bases.append(s)
-            s = s + B * loc_per_level[l]
+            s = s + B * loc_per_level[l] # 就是字面上那么算的，就是没有append最后一个s
         level_bases = shapes_per_level.new_tensor(level_bases).long() # L
         strides_default = shapes_per_level.new_tensor(self.strides).float() # L
         for im_i in range(B):
             targets_per_im = gt_instances[im_i]
             bboxes = targets_per_im.gt_boxes.tensor # n x 4
-            n = bboxes.shape[0]
+            n = bboxes.shape[0] #n是box的数目
             centers = ((bboxes[:, [0, 1]] + bboxes[:, [2, 3]]) / 2) # n x 2
+            
+            # 把centers扩展到每一个level上面
             centers = centers.view(n, 1, 2).expand(n, L, 2).contiguous()
-            if self.not_clamp_box:
+            if self.not_clamp_box: # 这个默认是false
                 h, w = gt_instances[im_i]._image_size
                 centers[:, :, 0].clamp_(min=0).clamp_(max=w-1)
                 centers[:, :, 1].clamp_(min=0).clamp_(max=h-1)
+            # 这里把strides也去扩展一下，为了后面相除
             strides = strides_default.view(1, L, 1).expand(n, L, 2)
+            # 就是把center映射到每一张特征图上
             centers_inds = (centers / strides).long() # n x L x 2
-            Ws = shapes_per_level[:, 1].view(1, L).expand(n, L)
+            Ws = shapes_per_level[:, 1].view(1, L).expand(n, L) # 只取宽，扩展到n L
             pos_ind = level_bases.view(1, L).expand(n, L) + \
                        im_i * loc_per_level.view(1, L).expand(n, L) + \
                        centers_inds[:, :, 1] * Ws + \
                        centers_inds[:, :, 0] # n x L
+            # 根据box的大小，判定他属于哪个尺度的特征图
             is_cared_in_the_level = self.assign_fpn_level(bboxes)
             pos_ind = pos_ind[is_cared_in_the_level].view(-1)
             label = targets_per_im.gt_classes.view(
                 n, 1).expand(n, L)[is_cared_in_the_level].view(-1)
 
+            # pos_inds是一个n维的向量，n表示n个box，每个位置上是那个box中心点的索引
+            # 前面已经将box归到了不同的特征图里
             pos_inds.append(pos_ind) # n'
             labels.append(label) # n'
         pos_inds = torch.cat(pos_inds, dim=0).long()
@@ -508,15 +527,23 @@ class CenterNet(nn.Module):
             is_cared_in_the_level: n x L
         '''
         size_ranges = boxes.new_tensor(
-            self.sizes_of_interest).view(len(self.sizes_of_interest), 2) # L x 2
-        crit = ((boxes[:, 2:] - boxes[:, :2]) **2).sum(dim=1) ** 0.5 / 2 # n
+            self.sizes_of_interest).view(len(self.sizes_of_interest), 2) # L x 2 Level个范围 2 表示一个最大值一个最小值
+        crit = ((boxes[:, 2:] - boxes[:, :2]) **2).sum(dim=1) ** 0.5 / 2 # n 算box的大小 ((x^2+y^2)^0.5)/2
         n, L = crit.shape[0], size_ranges.shape[0]
-        crit = crit.view(n, 1).expand(n, L)
-        size_ranges_expand = size_ranges.view(1, L, 2).expand(n, L, 2)
+        crit = crit.view(n, 1).expand(n, L)  
+        size_ranges_expand = size_ranges.view(1, L, 2).expand(n, L, 2)  # 把这两个都扩展成n*L
         is_cared_in_the_level = (crit >= size_ranges_expand[:, :, 0]) & \
             (crit <= size_ranges_expand[:, :, 1])
         return is_cared_in_the_level
-    
+    '''
+    返回值的意思是每个box归于哪个level 例如 n=3 L=5 那么返回的就是
+    True False False False False
+    False True False False False
+    False True False False False
+
+    这种矩阵的形式 哪个地方是True,就表明box属于哪个level
+
+    '''
 
     def assign_reg_fpn(self, reg_targets_per_im, size_ranges):
         '''

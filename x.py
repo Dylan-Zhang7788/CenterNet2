@@ -1,7 +1,7 @@
 import torch 
 
 feature=([4,2],[8,4],[16,8])
-strides=(8, 16, 32, 64, 128)
+strides=(8, 16,32)
 
 def compute_grids(strides, features):
     grids = []
@@ -33,5 +33,5 @@ def compute_grids(strides, features):
         grids.append(grids_per_level)
     return grids
 
-# print(compute_grids(strides,feature))
-compute_grids(strides,feature)
+print(compute_grids(strides,feature))
+# compute_grids(strides,feature)
