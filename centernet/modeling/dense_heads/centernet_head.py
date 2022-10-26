@@ -69,7 +69,6 @@ class CenterNetHead(nn.Module):
                 else:
                     conv_func = nn.Conv2d
                 tower.append(conv_func(
-                    # 不太理解这个地方，不都是一个东西吗
                     # 卷积核3 步长1 填充1 则大小不变
                         in_channels if i == 0 else channel,
                         channel, 
@@ -173,7 +172,9 @@ class CenterNetHead(nn.Module):
             reg = self.bbox_pred(bbox_tower)
             reg = self.scales[l](reg)
             bbox_reg.append(F.relu(reg))
-        # return的 clss是none bbox_reg与agn_hms都是与输入特征尺寸一样
-        # 二者都包括5张特征图 p2-p5
-        # bbox_reg为4通道，agn_hms为1通道
+        # 经过了上面的操作，输出的 clss全是none因为这里的head只用于生成proposal，不涉及类别
+        # bbox_reg是一个有5个维度的list，每个维度代表一个level，每个level中是一个[8,4,h,w]的数组
+        # 8代表有8张图，即batchsize，4代表了box的四个维度，h，w是特征图中像素的坐标
+        # agn_hms跟bbox_reg的结构是一样的，5个维度的list，每个维度代表一个level，每个level中是一个[8,1,h,w]的数组
+        # 后面的两个同样是点的坐标，heatmap每个点只有一个值
         return clss, bbox_reg, agn_hms

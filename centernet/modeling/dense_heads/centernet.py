@@ -181,7 +181,7 @@ class CenterNet(nn.Module):
         return ret
 
 
-    # 这里的images，就是图像
+    # 这里的images，就是图像，B*c*h*w
     # features_dict是由backbone输出的特征图，是字典{名字：特征图}，gt就是gt
     def forward(self, images, features_dict, gt_instances):
         # 获取到的features 处理一下，self.in_features有默认值 p3-p7
@@ -210,7 +210,7 @@ class CenterNet(nn.Module):
             pos_inds, labels, reg_targets, flattened_hms = \
                 self._get_ground_truth(
                     grids, shapes_per_level, gt_instances)
-            # logits_pred: M x F, reg_pred: M x 4, agn_hm_pred: M
+            # 输出结果：logits_pred: M x F, reg_pred: M x 4, agn_hm_pred: M
             logits_pred, reg_pred, agn_hm_pred = self._flatten_outputs(
                 clss_per_level, reg_pred_per_level, agn_hm_pred_per_level)
 
@@ -371,20 +371,31 @@ class CenterNet(nn.Module):
 
         # get positive pixel index
         if not self.more_pos:# 这个东西的默认值是false
+            # 得到的东西是 真值center坐标的索引，还要真值的列表
             pos_inds, labels = self._get_label_inds(
-                gt_instances, shapes_per_level) 
+                gt_instances, shapes_per_level)
                 # shapes_per_level 是[level数,2]
         else:
             pos_inds, labels = None, None
         heatmap_channels = self.num_classes
         L = len(grids)
         num_loc_list = [len(loc) for loc in grids]
+
+        # shapes_per_level.new_ones(num_loc_list[l]) 尺寸和num_loc_list[l]一样
+        # 也就相当于把 1 扩展成 shape 为 num_loc_list[l] 的数组
+        # 类型和shapes_per_level一样，然后全是1 
+        # self.strides[l] 就是(8,16,32,64,128)
+        # strides 是把这些都连起来了 假设这个shape是M
         strides = torch.cat([
             shapes_per_level.new_ones(num_loc_list[l]) * self.strides[l] \
             for l in range(L)]).float() # M
+        # strides的shape是M，这个的shape就是M*2
+        # 把self.sizes_of_interest[l] 扩展成shape为（num_loc_list[l], 2）的数组
         reg_size_ranges = torch.cat([
             shapes_per_level.new_tensor(self.sizes_of_interest[l]).float().view(
             1, 2).expand(num_loc_list[l], 2) for l in range(L)]) # M x 2
+        # grids 也 cat 一下 gird的数目和num_loc_list的数目是相等的，都是M（可以去看笔记）
+        # M 表示总共有多少个位置点
         grids = torch.cat(grids, dim=0) # M x 2
         M = grids.shape[0]
 
@@ -402,57 +413,95 @@ class CenterNet(nn.Module):
                     grids.new_zeros((
                         M, 1 if self.only_proposal else heatmap_channels)))
                 continue
-            
+
+            # 这里好像用到了广播机制
+            # l是left t是top r是right b是bottom 也就是box边框距离grid点的位置（似乎还没牵扯到真值）
             l = grids[:, 0].view(M, 1) - boxes[:, 0].view(1, N) # M x N
             t = grids[:, 1].view(M, 1) - boxes[:, 1].view(1, N) # M x N
             r = boxes[:, 2].view(1, N) - grids[:, 0].view(M, 1) # M x N
             b = boxes[:, 3].view(1, N) - grids[:, 1].view(M, 1) # M x N
             reg_target = torch.stack([l, t, r, b], dim=2) # M x N x 4
 
+            # 这里的center是box的中心 
             centers = ((boxes[:, [0, 1]] + boxes[:, [2, 3]]) / 2) # N x 2
+            # 下面几步做的是，让centers和grid一致 center算出来是带小数点的，但像素不能是小数
+            # (centers_expanded/strides_expanded).int() 这一步是center变到了缩小后的特征图的点上，int是四舍五入的操作
+            # 再乘一个strides_expanded 就是再变回来的过程，和grid里的操作一样了，后面的 +strides_expanded/2 也是为了和grid一致
+            # 这样的center是近似了之后的
             centers_expanded = centers.view(1, N, 2).expand(M, N, 2) # M x N x 2
             strides_expanded = strides.view(M, 1, 1).expand(M, N, 2)
             centers_discret = ((centers_expanded / strides_expanded).int() * \
                 strides_expanded).float() + strides_expanded / 2 # M x N x 2
             
+            # is_peak 看girds中的某一个点 是不是和center重合了
             is_peak = (((grids.view(M, 1, 2).expand(M, N, 2) - \
                 centers_discret) ** 2).sum(dim=2) == 0) # M x N
+            # is_in_boxes 看girds中的某个点，是不是在box里面
+            # 根据他的距离定义，只要最小的那个值不是负数，就一定在，否则一定不在
             is_in_boxes = reg_target.min(dim=2)[0] > 0 # M x N
+            # is_center3x3 看grid点是不是在center点的3*3周围
             is_center3x3 = self.get_center3x3(
                 grids, centers, strides) & is_in_boxes # M x N
+            # 看reg_target属于哪个level 这里作者也写了 要把它和assign_fpn_level合并
             is_cared_in_the_level = self.assign_reg_fpn(
                 reg_target, reg_size_ranges) # M x N
+            # reg_mask是 M*N 的True和Flase 
+            # M表示这个点是第M个点（这个里头就包含了在哪个level），N表示第N个box
+            # reg_mask中，在center点周围3*3区域，且在box内部，且被所在level care的点才是True
             reg_mask = is_center3x3 & is_cared_in_the_level # M x N
 
+            # 得到的结果是所有grid和点centers距离的平方，这里的centers是没有近似过的
+            # 注意 这里N个框分到了N个维度，相当于分了N层，每一层有M个网格点，但只有1个center点
             dist2 = ((grids.view(M, 1, 2).expand(M, N, 2) - \
                 centers_expanded) ** 2).sum(dim=2) # M x N
+            # peak的点 距离肯定是0
             dist2[is_peak] = 0
+            # self.delta=(1-hm_min_overlap)/(1+hm_min_overlap) area=gt_boxes.area()
             radius2 = self.delta ** 2 * 2 * area # N
+            # self.min_radius=4
+            # torch.clamp 裁剪函数，radius2中小于min_radius平方的元素一律赋值min_radius平方
             radius2 = torch.clamp(
                 radius2, min=self.min_radius ** 2)
+            # 距离/radius2
             weighted_dist2 = dist2 / radius2.view(1, N).expand(M, N) # M x N            
+            # 最后获得reg_target shape：M*4
+            # 如果一个grid点不对应任何center点，那么他的那四个维度全是负无穷
+            # 否则，它对应那个center点，存放的就是哪个center点的
             reg_target = self._get_reg_targets(
                 reg_target, weighted_dist2.clone(), reg_mask, area) # M x 4
 
             if self.only_proposal:
+                # 平铺了的heatmap，跟论文里的定义是一致的，值很小的地方会被置0
                 flattened_hm = self._create_agn_heatmaps_from_dist(
                     weighted_dist2.clone()) # M x 1
             else:
                 flattened_hm = self._create_heatmaps_from_dist(
                     weighted_dist2.clone(), gt_classes, 
                     channels=heatmap_channels) # M x C
-
+            # 一个batch里有B个图，每个图append一次，所以现在的reg_target是一个8维的list
+            # 每一维都是 M*4的数组，M代表一共M个点，4是box的那四个维度
+            # flattened_hms也是一样的 hm 是heatmap的缩写
             reg_targets.append(reg_target)
             flattened_hms.append(flattened_hm)
         
         # transpose im first training_targets to level first ones
+        # num_loc_list grid中点的数目，不论原图大小是多少，这个的数目是一定的
+        # reg_targets，flattened_hms都变成了一个5维的list
+        # list的每个维度，代表了一个level，每个level中包含所有batch的所有框的所有grid点
+        # 比如说他的第一个维度，记图1的level1的点为1-1，图2的level1的点2-1
+        # 那么他存的就是： 1-1，2-1,3-1,4-1.....8-1
+        # 这些点按照顺序排在一起，但是是并在了一个维度里
         reg_targets = _transpose(reg_targets, num_loc_list)
         flattened_hms = _transpose(flattened_hms, num_loc_list)
+        # 除以一下步长
         for l in range(len(reg_targets)):
             reg_targets[l] = reg_targets[l] / float(self.strides[l])
+        # 再把他们的所有维度连起来
+        # 记图1，level1的点为1-1,那么现在的 reg_targets就是：
+        # 1-1，2-1,3-1.....8-1,1-2,2-2...8-2，.....1-5,2-5....8-5
+        # flattened_hms 也是一样
         reg_targets = cat([x for x in reg_targets], dim=0) # MB x 4
         flattened_hms = cat([x for x in flattened_hms], dim=0) # MB x C
-        
         return pos_inds, labels, reg_targets, flattened_hms
 
 
@@ -515,8 +564,7 @@ class CenterNet(nn.Module):
             labels.append(label) # n'
         pos_inds = torch.cat(pos_inds, dim=0).long()
         labels = torch.cat(labels, dim=0)
-        return pos_inds, labels # N, N
-
+        return pos_inds, labels # N, N （N不一定是多少，跟N个框那个不是一个东西）
 
     def assign_fpn_level(self, boxes):
         '''
@@ -534,16 +582,17 @@ class CenterNet(nn.Module):
         size_ranges_expand = size_ranges.view(1, L, 2).expand(n, L, 2)  # 把这两个都扩展成n*L
         is_cared_in_the_level = (crit >= size_ranges_expand[:, :, 0]) & \
             (crit <= size_ranges_expand[:, :, 1])
+        '''
+        返回值的意思是每个box归于哪个level 例如 n=3 L=5 那么返回的就是
+        True  False False False False
+        False True  False False False
+        False True  True  False False
+
+        这种矩阵的形式 哪个地方是True,就表明box属于哪个level
+        注意 因为范围是有重叠的,所以一个box可能会出现在两个level上
+        '''
         return is_cared_in_the_level
-    '''
-    返回值的意思是每个box归于哪个level 例如 n=3 L=5 那么返回的就是
-    True False False False False
-    False True False False False
-    False True False False False
 
-    这种矩阵的形式 哪个地方是True,就表明box属于哪个level
-
-    '''
 
     def assign_reg_fpn(self, reg_targets_per_im, size_ranges):
         '''
@@ -566,9 +615,12 @@ class CenterNet(nn.Module):
           is_*: M x N
         '''
         dist[mask == 0] = INF * 1.0
+        # 取5个框里面，weighted_dist2最小的那个，把他的值和索引都取出来
         min_dist, min_inds = dist.min(dim=1) # M
+        # 根据上面的weighted_dist2最小原则，把 M*N*4的框 变成了M*4 
         reg_targets_per_im = reg_targets[
             range(len(reg_targets)), min_inds] # M x N x 4 --> M x 4
+        # 如果weighted_dist2的最小值是无穷，那么就把按个点的值，换成负无穷
         reg_targets_per_im[min_dist == INF] = - INF
         return reg_targets_per_im
 
@@ -599,6 +651,10 @@ class CenterNet(nn.Module):
           heatmaps: M x 1
         '''
         heatmaps = dist.new_zeros((dist.shape[0], 1))
+        # torch.exp表示计算e的多少次方
+        # 找到距离最小的那个点，计算e的dist次方
+        # 注意，这里的heatmap是直接用dist算出来的，每一个点都是有值的
+        # 只是值太小的，被置成了0
         heatmaps[:, 0] = torch.exp(-dist.min(dim=1)[0])
         zeros = heatmaps < 1e-4
         heatmaps[zeros] = 0
@@ -629,6 +685,15 @@ class CenterNet(nn.Module):
         strides_expanded = strides.view(M, 1, 1).expand(M, N, 2) # M x N
         centers_discret = ((centers_expanded / strides_expanded).int() * \
             strides_expanded).float() + strides_expanded / 2 # M x N x 2
+        # 缩放前面已经说了，这样的话，每个center点都有一个grid与他重合
+        # 然后 下面是回看center点与grid点的x，y坐标之差，是不是小于步长满足这个条件的
+        # 就是center点，以及他周围一圈的，一共3*3=9个点
+        '''
+        * * *
+        * c *
+        * * *
+        c表示center,* 加上 c 一共9个点,所以叫get_center3*3
+        '''
         dist_x = (locations_expanded[:, :, 0] - centers_discret[:, :, 0]).abs()
         dist_y = (locations_expanded[:, :, 1] - centers_discret[:, :, 1]).abs()
         return (dist_x <= strides_expanded[:, :, 0]) & \

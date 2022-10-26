@@ -14,15 +14,19 @@ INF = 1000000000
 
 def _transpose(training_targets, num_loc_list):
     '''
+    num_loc_list 是 每一个level的grid点数 格式是[L1,L2,L3,L4,L5]
     This function is used to transpose image first training targets to 
         level first ones
     :return: level first training targets
     '''
+    # 经历了下面这一步的training_targets，还是8维度的list
+    # 每一个维度里又分了5个list，是把点按照level分成了5个等级
     for im_i in range(len(training_targets)):
         training_targets[im_i] = torch.split(
             training_targets[im_i], num_loc_list, dim=0)
 
     targets_level_first = []
+    # 把每一个level上的target连接起来 
     for targets_per_level in zip(*training_targets):
         targets_level_first.append(
             torch.cat(targets_per_level, dim=0))
