@@ -257,7 +257,9 @@ class CenterNet(nn.Module):
         logits_pred, reg_pred, agn_hm_pred):
         '''
         Inputs:
-            pos_inds: N
+            pos_inds: N 
+            这里的N不是说每个图有N个框,也不是说这个Batch里总共N个框,就是简单的有N个pos_inds
+            因为相同的框可能被不同的level同时care,那这个框就会出现两次,label也是同理
             labels: N
             reg_targets: M x 4
             flattened_hms: M x C
@@ -271,6 +273,7 @@ class CenterNet(nn.Module):
         assert (torch.isfinite(reg_pred).all().item())
         num_pos_local = pos_inds.numel()
         num_gpus = get_world_size()
+        # 分布式训练的一个东西
         if self.no_reduce:
             total_num_pos = num_pos_local * num_gpus
         else:
@@ -293,24 +296,29 @@ class CenterNet(nn.Module):
             neg_loss = self.neg_weight * neg_loss / num_pos_avg
             losses['loss_centernet_pos'] = pos_loss
             losses['loss_centernet_neg'] = neg_loss
-        
+        # torch.nonzero 输出的非零元素的索引，这里squeeze是减少他的维度
         reg_inds = torch.nonzero(reg_targets.max(dim=1)[0] >= 0).squeeze(1)
+        # 再用索引把预测值给取出来
         reg_pred = reg_pred[reg_inds]
+        # 把真值也给取出来
         reg_targets_pos = reg_targets[reg_inds]
+        # 这一步是提取最大值，但是只有proposal的情况下，总共就一维，所以是不变的
         reg_weight_map = flattened_hms.max(dim=1)[0]
         reg_weight_map = reg_weight_map[reg_inds]
+        # 示例里的no_norm_reg是True 所以这里的reg_weight_map全是1
         reg_weight_map = reg_weight_map * 0 + 1 \
             if self.not_norm_reg else reg_weight_map
         if self.no_reduce:
             reg_norm = max(reg_weight_map.sum(), 1)
         else:
             reg_norm = max(reduce_sum(reg_weight_map.sum()).item() / num_gpus, 1)
-        
+        # reg_weight 默认值是2.0
+        # 计算
         reg_loss = self.reg_weight * self.iou_loss(
             reg_pred, reg_targets_pos, reg_weight_map,
             reduction='sum') / reg_norm
         losses['loss_centernet_loc'] = reg_loss
-
+        # 在这里这个设置的是True
         if self.with_agn_hm:
             cat_agn_heatmap = flattened_hms.max(dim=1)[0] # M
             agn_pos_loss, agn_neg_loss = binary_heatmap_focal_loss_jit(

@@ -66,10 +66,14 @@ def binary_heatmap_focal_loss(
     Returns:
         Loss tensor with the reduction option applied.
     """
+    # 先将预测值进行一个sigmod运算，把预测值限定到0-1之间
     pred = torch.clamp(inputs.sigmoid_(), min=sigmoid_clamp, max=1-sigmoid_clamp)
+    # neg_weights =(1-预测值)^β
     neg_weights = torch.pow(1 - targets, beta)
     pos_pred = pred[pos_inds] # N
+    # pos_loss = log(预测值)*（1-预测值）^2 这是在真值为1的情况下
     pos_loss = torch.log(pos_pred) * torch.pow(1 - pos_pred, gamma)
+    # neg_loss = log(1-预测值)*(预测值)^2*(1-预测值)^β 这是在真值不为1的情况下
     neg_loss = torch.log(1 - pred) * torch.pow(pred, gamma) * neg_weights
     if ignore_high_fp > 0:
         not_high_fp = (pred < ignore_high_fp).float()

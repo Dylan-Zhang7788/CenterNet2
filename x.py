@@ -1,8 +1,5 @@
-from array import array
+import torch
 
-
-import numpy as np
-a=np.array([5,6])
-b=np.array([2,4])
-
-c=((a/b).int()*b).float()+b/2
+a=torch.tensor([0,0,0,1,1,3,0])
+b=torch.nonzero(a)
+print(b)
