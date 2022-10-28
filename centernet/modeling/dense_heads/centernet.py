@@ -237,6 +237,7 @@ class CenterNet(nn.Module):
                     grids, clss_per_level, reg_pred_per_level, 
                     images.image_sizes, agn_hm_pred_per_level)
             if self.only_proposal or self.as_proposal:
+                # 这个地方就是换了个名字，然后把pred_classes移除了
                 for p in range(len(proposals)):
                     proposals[p].proposal_boxes = proposals[p].get('pred_boxes')
                     proposals[p].objectness_logits = proposals[p].get('scores')
@@ -331,6 +332,7 @@ class CenterNet(nn.Module):
             )
             agn_pos_loss = self.pos_weight * agn_pos_loss / num_pos_avg
             agn_neg_loss = self.neg_weight * agn_neg_loss / num_pos_avg
+            # 两个loss，就是centernet1中的loss 真值为1，和真值不为1两种情况
             losses['loss_centernet_agn_pos'] = agn_pos_loss
             losses['loss_centernet_agn_neg'] = agn_neg_loss
     

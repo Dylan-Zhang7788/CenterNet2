@@ -68,9 +68,11 @@ class CustomROIHeads(StandardROIHeads):
 
 
 @ROI_HEADS_REGISTRY.register()
+# 继承关系：CustomCascadeROIHeads → CascadeROIHeads → StandardROIHeads → ROIHeads
 class CustomCascadeROIHeads(CascadeROIHeads):
     @classmethod
     def _init_box_head(self, cfg, input_shape):
+        # 示例里定义为True
         self.mult_proposal_score = cfg.MODEL.ROI_BOX_HEAD.MULT_PROPOSAL_SCORE
         ret = super()._init_box_head(cfg, input_shape)
         del ret['box_predictors']
@@ -181,5 +183,3 @@ class CustomCascadeROIHeads(CascadeROIHeads):
                     debug_show_name=self.debug_show_name,
                     vis_thresh=self.vis_thresh)
             return pred_instances, {}
-
-
