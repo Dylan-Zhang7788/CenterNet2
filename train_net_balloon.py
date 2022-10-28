@@ -13,6 +13,7 @@ import numpy as np
 import cv2
 
 from fvcore.common.timer import Timer
+from detectron2 import model_zoo
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
 from detectron2.config import get_cfg
@@ -114,7 +115,7 @@ def do_test(cfg, model):
         results = list(results.values())[0]
     return results
 
-def do_train(cfg, model, resume=True):
+def do_train(cfg, model, resume=False):
     model.train()
     optimizer = build_optimizer(cfg, model)   # solver.build.py
     scheduler = build_lr_scheduler(cfg, optimizer)  # solver.build.py
@@ -243,9 +244,12 @@ def setup(args):  # 根据arg得到cfg的一个函数
     cfg.DATASETS.TRAIN=('balloon_train',)  #训练集
     cfg.DATASETS.TEST=('balloon_val',)  #测试集
     cfg.DATALOADER.NUM_WORKERS=8   #执行序，0是cpu
+    cfg.SOLVER.IMS_PER_BATCH=16  #每批次改变的大小
     cfg.SOLVER.BASE_LR=0.01  #学习率
     cfg.SOLVER.STEPS=(4000,)
     cfg.SOLVER.MAX_ITER=6000  #最大迭代次数
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=256  #default:512 批次大小
+    cfg.MODEL.WEIGHTS=model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     cfg.SOLVER.CHECKPOINT_PERIOD=5000
     cfg.MODEL.ROI_HEADS.NUM_CLASSES=1  #一类
     
@@ -337,8 +341,6 @@ if __name__ == "__main__":
     print("Command Line Args:", args)    # engine.launch 第一个是函数，后面全是参数
     launch(
         main,
-        # 后面的这些参数全都在 default_argument_parser() 里头定义的 
-        # 要改可以 args.xxx=xxx 就行了
         args.num_gpus,        
         num_machines=args.num_machines,
         machine_rank=args.machine_rank,
