@@ -42,6 +42,7 @@ from centernet.config import add_centernet_config
 from centernet.data.custom_build_augmentation import build_custom_augmentation
 
 logger = logging.getLogger("detectron2")
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def default_argument_parser(epilog=None):
     parser = argparse.ArgumentParser(
@@ -49,12 +50,8 @@ def default_argument_parser(epilog=None):
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--config-file", default="./configs/CenterNet2_R50_1x.yaml", metavar="FILE", help="path to config file")
-    parser.add_argument(
-        "--resume",
-        action="store_true",
-        help="Whether to attempt to resume from the checkpoint directory. "
-        "See documentation of `DefaultTrainer.resume_or_load()` for what it means.",
-    )
+    parser.add_argument("--resume",action="store_true",help="Whether to attempt to resume from the checkpoint directory. "
+                        "See documentation of `DefaultTrainer.resume_or_load()` for what it means.",)
     parser.add_argument("--eval-only",action="store_true", help="perform evaluation only")
     parser.add_argument("--num-gpus", type=int, default=2, help="number of gpus *per machine*")
     parser.add_argument("--num-machines", type=int, default=1, help="total number of machines")
@@ -88,10 +85,16 @@ def setup(args):  # 根据arg得到cfg的一个函数
         file_name = os.path.basename(args.config_file)[:-5]
         cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
         logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
-    cfg.MODEL.WEIGHTS="/home/zhangdi/zhangdi_ws/CenterNet2/models/CenterNet2_R50_1x.pth"
+    # cfg.MODEL.WEIGHTS="./models/CenterNet2_R50_1x.pth"
+    cfg.DATALOADER.NUM_WORKERS=8   #执行序，0是cpu
+    cfg.SOLVER.IMS_PER_BATCH=8  #每批次改变的大小
+    cfg.SOLVER.BASE_LR=0.01  #学习率
+    cfg.SOLVER.STEPS=(60000,80000,)
+    cfg.SOLVER.MAX_ITER=120000  #最大迭代次数
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=512  #default:512 批次大小
     cfg.freeze()   # 冻结参数
     default_setup(cfg, args) # 初始化一下
-    return cfg 
+    return cfg
 
 def do_test(cfg, model):
     # OrderedDict()是一个有序的词典，Python里的函数

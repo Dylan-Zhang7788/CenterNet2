@@ -61,7 +61,7 @@ def default_argument_parser(epilog=None):
         "See documentation of `DefaultTrainer.resume_or_load()` for what it means.",
     )
     parser.add_argument("--eval-only", action="store_true", help="perform evaluation only")
-    parser.add_argument("--num-gpus", type=int, default=2, help="number of gpus *per machine*")
+    parser.add_argument("--num-gpus", type=int, default=1, help="number of gpus *per machine*")
     parser.add_argument("--num-machines", type=int, default=1, help="total number of machines")
     parser.add_argument(
         "--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)"
@@ -81,6 +81,34 @@ def default_argument_parser(epilog=None):
     )
     return parser
 
+def setup(args):  # 根据arg得到cfg的一个函数
+    """
+    Create configs and perform basic setups.
+    """
+    cfg = get_cfg()   # 加载默认的config 
+    add_centernet_config(cfg)   # 添加centernet的config
+    cfg.merge_from_file(args.config_file)  # 从config_file里合并一部分参数进来
+    cfg.merge_from_list(args.opts)  # 自己设置的参数 再通过opt合并进来
+
+    cfg.DATASETS.TRAIN=('balloon_train',)  #训练集
+    cfg.DATASETS.TEST=('balloon_val',)  #测试集
+    cfg.DATALOADER.NUM_WORKERS=8   #执行序，0是cpu
+    cfg.SOLVER.IMS_PER_BATCH=8  #每批次改变的大小
+    cfg.SOLVER.BASE_LR=0.01  #学习率
+    cfg.SOLVER.STEPS=(4000,8000,)
+    cfg.SOLVER.MAX_ITER=10000  #最大迭代次数
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=256  #default:512 批次大小
+    # cfg.MODEL.WEIGHTS=model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
+    # cfg.SOLVER.CHECKPOINT_PERIOD=5000
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES=1  #一类
+    
+    if '/auto' in cfg.OUTPUT_DIR:
+        file_name = os.path.basename(args.config_file)[:-5]
+        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
+        logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
+    cfg.freeze()   # 冻结参数
+    default_setup(cfg, args) # 初始化一下
+    return cfg 
 
 def do_test(cfg, model):
     # OrderedDict()是一个有序的词典，Python里的函数
@@ -232,34 +260,6 @@ def do_train(cfg, model, resume=False):
             "Total training time: {}".format(
                 str(datetime.timedelta(seconds=int(total_time)))))
 
-def setup(args):  # 根据arg得到cfg的一个函数
-    """
-    Create configs and perform basic setups.
-    """
-    cfg = get_cfg()   # 加载默认的config 
-    add_centernet_config(cfg)   # 添加centernet的config
-    cfg.merge_from_file(args.config_file)  # 从config_file里合并一部分参数进来
-    cfg.merge_from_list(args.opts)  # 自己设置的参数 再通过opt合并进来
-
-    cfg.DATASETS.TRAIN=('balloon_train',)  #训练集
-    cfg.DATASETS.TEST=('balloon_val',)  #测试集
-    cfg.DATALOADER.NUM_WORKERS=8   #执行序，0是cpu
-    cfg.SOLVER.IMS_PER_BATCH=16  #每批次改变的大小
-    cfg.SOLVER.BASE_LR=0.01  #学习率
-    cfg.SOLVER.STEPS=(4000,)
-    cfg.SOLVER.MAX_ITER=6000  #最大迭代次数
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=256  #default:512 批次大小
-    cfg.MODEL.WEIGHTS=model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
-    cfg.SOLVER.CHECKPOINT_PERIOD=5000
-    cfg.MODEL.ROI_HEADS.NUM_CLASSES=1  #一类
-    
-    if '/auto' in cfg.OUTPUT_DIR:
-        file_name = os.path.basename(args.config_file)[:-5]
-        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
-        logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
-    cfg.freeze()   # 冻结参数
-    default_setup(cfg, args) # 初始化一下
-    return cfg 
 
 def get_balloon_dicts(img_dir):
     json_file=os.path.join(img_dir,'via_region_data.json')
