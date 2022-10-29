@@ -29,6 +29,7 @@ def setup_cfg(args):
     # Set score_threshold for builtin models
     cfg.MODEL.RETINANET.SCORE_THRESH_TEST = args.confidence_threshold
     cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST = args.confidence_threshold
+    cfg.MODEL.ROI_HEADS.NUM_CLASSES=1
     if cfg.MODEL.META_ARCHITECTURE in ['ProposalNetwork', 'CenterNetDetector']:
         cfg.MODEL.CENTERNET.INFERENCE_TH = args.confidence_threshold
         cfg.MODEL.CENTERNET.NMS_TH = cfg.MODEL.ROI_HEADS.NMS_THRESH_TEST
@@ -64,7 +65,7 @@ def get_parser():
     parser.add_argument(
         "--opts",
         help="Modify config options using the command-line 'KEY VALUE' pairs",
-        default=['MODEL.WEIGHTS' ,'./models/CenterNet2_R50_1x.pth'],
+        default=['MODEL.WEIGHTS' ,'./output/CenterNet2/CenterNet2_R50_1x/model_final.pth'],
         nargs=argparse.REMAINDER,
     )
     return parser

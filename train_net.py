@@ -76,6 +76,22 @@ def default_argument_parser(epilog=None):
     )
     return parser
 
+def setup(args):  # 根据arg得到cfg的一个函数
+    """
+    Create configs and perform basic setups.
+    """
+    cfg = get_cfg()   # 加载默认的config 
+    add_centernet_config(cfg)   # 添加centernet的config
+    cfg.merge_from_file(args.config_file)  # 从config_file里合并一部分参数进来
+    cfg.merge_from_list(args.opts)  # 自己设置的参数 再通过opt合并进来
+    if '/auto' in cfg.OUTPUT_DIR:
+        file_name = os.path.basename(args.config_file)[:-5]
+        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
+        logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
+    cfg.MODEL.WEIGHTS="/home/zhangdi/zhangdi_ws/CenterNet2/models/CenterNet2_R50_1x.pth"
+    cfg.freeze()   # 冻结参数
+    default_setup(cfg, args) # 初始化一下
+    return cfg 
 
 def do_test(cfg, model):
     # OrderedDict()是一个有序的词典，Python里的函数
@@ -226,23 +242,6 @@ def do_train(cfg, model, resume=True):
         logger.info(
             "Total training time: {}".format(
                 str(datetime.timedelta(seconds=int(total_time)))))
-
-def setup(args):  # 根据arg得到cfg的一个函数
-    """
-    Create configs and perform basic setups.
-    """
-    cfg = get_cfg()   # 加载默认的config 
-    add_centernet_config(cfg)   # 添加centernet的config
-    cfg.merge_from_file(args.config_file)  # 从config_file里合并一部分参数进来
-    cfg.merge_from_list(args.opts)  # 自己设置的参数 再通过opt合并进来
-    if '/auto' in cfg.OUTPUT_DIR:
-        file_name = os.path.basename(args.config_file)[:-5]
-        cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
-        logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
-    cfg.MODEL.WEIGHTS="/home/zhangdi/zhangdi_ws/CenterNet2/models/CenterNet2_R50_1x.pth"
-    cfg.freeze()   # 冻结参数
-    default_setup(cfg, args) # 初始化一下
-    return cfg 
 
 
 def main(args):

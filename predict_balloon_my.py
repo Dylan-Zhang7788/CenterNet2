@@ -64,7 +64,7 @@ cfg.merge_from_file("./configs/CenterNet2_R50_1x.yaml")  # 从config_file里合�
 cfg.MODEL.ROI_HEADS.NUM_CLASSES=1  #一类
 # cfg.MODEL.DEVICE='cpu'  #注释掉此项，系统默认使用NVidia的显卡
 cfg.MODEL.WEIGHTS='./output/CenterNet2/CenterNet2_R50_1x/model_final.pth'
-cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST=0.6
+cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST=0.7
 predictor=DefaultPredictor(cfg)
 val_dicts=DatasetCatalog.get('balloon_val')
 balloon_metadata=MetadataCatalog.get('balloon_val')
