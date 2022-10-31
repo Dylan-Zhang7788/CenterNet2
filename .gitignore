@@ -2,6 +2,7 @@ third_party/detectron2
 slurm*
 # output dir
 output-COCO
+output-balloon
 my_log
 output
 instant_test_output

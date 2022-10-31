@@ -314,7 +314,7 @@ class CenterNet(nn.Module):
         else:
             reg_norm = max(reduce_sum(reg_weight_map.sum()).item() / num_gpus, 1)
         # reg_weight 默认值是2.0
-        # 计算
+        # 计算iou loss
         reg_loss = self.reg_weight * self.iou_loss(
             reg_pred, reg_targets_pos, reg_weight_map,
             reduction='sum') / reg_norm
@@ -322,6 +322,7 @@ class CenterNet(nn.Module):
         # 在这里这个设置的是True
         if self.with_agn_hm:
             cat_agn_heatmap = flattened_hms.max(dim=1)[0] # M
+            # 这里输出的就是centernet的正样本loss和负样本loss
             agn_pos_loss, agn_neg_loss = binary_heatmap_focal_loss_jit(
                 agn_hm_pred.float(), cat_agn_heatmap.float(), pos_inds,
                 alpha=self.hm_focal_alpha, 
