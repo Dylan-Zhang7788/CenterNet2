@@ -42,13 +42,12 @@ class CenterNetHead(nn.Module):
 
         # centernet2里
         # self.only_proposal默认值是TRUE
-        # num_box_convs=4 num_share_convs=0
         # use_deformable默认是false
         head_configs = {
             "cls": (num_cls_convs if not self.only_proposal else 0, \
                 use_deformable),
-            "bbox": (num_box_convs, use_deformable),
-            "share": (num_share_convs, use_deformable)}
+            "bbox": (num_box_convs, use_deformable), # num_box_convs 默认是4
+            "share": (num_share_convs, use_deformable)} # num_share_convs 默认是0
 
         # in_channels = [s.channels for s in input_shape]
         # assert len(set(in_channels)) == 1, \

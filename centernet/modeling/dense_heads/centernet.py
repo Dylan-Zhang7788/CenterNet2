@@ -189,9 +189,10 @@ class CenterNet(nn.Module):
         # 输入centernet_head里，不是ROIhead，是centernet_head
         clss_per_level, reg_pred_per_level, agn_hm_pred_per_level = \
             self.centernet_head(features)
-        # compute_grids 计算网格 输出的是 每个level上的一系列网格中心点
-        # 并且输出的是中心点的绝对坐标 笔记里有记的
-        # grids: list，level数个 [坐标组个数，2] 2表示x，y
+        # compute_grids 计算网格 输出的是 每个level上的一系列中心点
+        # 并且输出的是中心点在原图中的绝对坐标 笔记里有记的
+        # 相当于 把特征图的像素 映射回了 原图 
+        # grids: list，level数个 [每个特征图的像素个数，2] 2表示x，y
         # 注意 x，y 和 h，w不一样 前者是点，是一个数，后者是长度，是一堆的x,y
         # 为什么grids的输出不涉及到尺寸 原因是坐标点的个数,就是特征图的h,w相乘,特征图里有多少点,这里就是多少点
         grids = self.compute_grids(features)
@@ -390,24 +391,28 @@ class CenterNet(nn.Module):
             pos_inds, labels = None, None
         heatmap_channels = self.num_classes
         L = len(grids)
+        # 每一个level的点 也就是loc的数目 list 共5个值
         num_loc_list = [len(loc) for loc in grids]
 
         # shapes_per_level.new_ones(num_loc_list[l]) 尺寸和num_loc_list[l]一样
-        # 也就相当于把 1 扩展成 shape 为 num_loc_list[l] 的数组
         # 类型和shapes_per_level一样，然后全是1 
         # self.strides[l] 就是(8,16,32,64,128)
         # strides 是把这些都连起来了 假设这个shape是M
+        # strides = [8,8,8,8,8...16,16,16.......128,128,128]
+        # 一共有num_loc_list[0]个8，num_loc_list[1]个16....num_loc_list[4]个128
         strides = torch.cat([
             shapes_per_level.new_ones(num_loc_list[l]) * self.strides[l] \
-            for l in range(L)]).float() # M
-        # strides的shape是M，这个的shape就是M*2
+            for l in range(L)]).float() # M,M=num_loc_list[0]+num_loc_list[1]+...+num_loc_list[4]
+        
+        # strides的shape是M，reg_size_ranges的shape就是[M,2]
         # 把self.sizes_of_interest[l] 扩展成shape为（num_loc_list[l], 2）的数组
+        # reg_size_ranges表示每个level所care的reg的size的范围
         reg_size_ranges = torch.cat([
             shapes_per_level.new_tensor(self.sizes_of_interest[l]).float().view(
-            1, 2).expand(num_loc_list[l], 2) for l in range(L)]) # M x 2
+            1, 2).expand(num_loc_list[l], 2) for l in range(L)]) # [M,2]
         # grids 也 cat 一下 gird的数目和num_loc_list的数目是相等的，都是M（可以去看笔记）
         # M 表示总共有多少个位置点
-        grids = torch.cat(grids, dim=0) # M x 2
+        grids = torch.cat(grids, dim=0) # [M,2]
         M = grids.shape[0]
 
         reg_targets = []
@@ -557,6 +562,8 @@ class CenterNet(nn.Module):
             # 这里把strides也去扩展一下，为了后面相除
             strides = strides_default.view(1, L, 1).expand(n, L, 2)
             # 就是把center映射到每一张特征图上
+            # 想一下这个，像素值可以理解成是第几个点 例如(16,32)是原图上横着数第16个，竖着数第32个点
+            # 那么现在把原图卷积成缩小了8倍的特征图，那这个点不就是横着数第2个，数着数第3个点了嘛
             centers_inds = (centers / strides).long() # n x L x 2
             Ws = shapes_per_level[:, 1].view(1, L).expand(n, L) # 只取宽，扩展到n L
             pos_ind = level_bases.view(1, L).expand(n, L) + \
@@ -676,6 +683,11 @@ class CenterNet(nn.Module):
         # Reshape: (N, F, Hl, Wl) -> (N, Hl, Wl, F) -> (sum_l N*Hl*Wl, F)
         clss = cat([x.permute(0, 2, 3, 1).reshape(-1, x.shape[1]) \
             for x in clss], dim=0) if clss[0] is not None else None
+        # permute的结果是[8,H,W,4] 之后进行reshape，就是：[8*H*W,4] 
+        # 之后再依次首尾相接
+        # 记图1的level1为1-1 图2的level1为2-1 
+        # reshape后每个level的结果都是 1-1,2-1,3-1...8-1
+        # 之后再将5个level进行cat 最终结果就是：1-1,2-1,3-1..8-1,1-2,2-2...8-2....1-5,2-5...8-5
         reg_pred = cat(
             [x.permute(0, 2, 3, 1).reshape(-1, 4) for x in reg_pred], dim=0)            
         agn_hm_pred = cat([x.permute(0, 2, 3, 1).reshape(-1) \
