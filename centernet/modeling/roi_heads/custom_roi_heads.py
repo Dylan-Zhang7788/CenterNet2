@@ -101,6 +101,8 @@ class CustomCascadeROIHeads(CascadeROIHeads):
         """
         Add mult proposal scores at testing
         """
+        # proposals是8维的list 表示8张图
+        # 每个元素包含proposal_boxes, objectness_logits, gt_classes, gt_boxes
         if (not self.training) and self.mult_proposal_score:
             if len(proposals) > 0 and proposals[0].has('scores'):
                 proposal_scores = [
@@ -108,17 +110,25 @@ class CustomCascadeROIHeads(CascadeROIHeads):
             else:
                 proposal_scores = [
                     p.get('objectness_logits') for p in proposals]
-        
+        # box_in_features就是 p3 p4 p5 p6 p7
         features = [features[f] for f in self.box_in_features]
         head_outputs = []  # (predictor, predictions, proposals)
         prev_pred_boxes = None
         image_sizes = [x.image_size for x in proposals]
         for k in range(self.num_cascade_stages):
             if k > 0:
+                # 根据预测的选框 再次产生proposal，同样是是8维的list 表示8张图
+                # 但是目前为止每个元素只包括 proposal_boxes
                 proposals = self._create_proposals_from_boxes(prev_pred_boxes, image_sizes)
                 if self.training:
+                    # 经过了_match_and_label_boxes的proposal
+                    # 每个元素包含 proposal_boxes, gt_classes, gt_boxes 但不包含objectness_logits
                     proposals = self._match_and_label_boxes(proposals, k, targets)
+            # 经过runstage的predictions是一个list 两个量分别是类别预测结果和选框预测结果
+            # 类别预测结果：[2048,类别数+1] 选框预测结果[2048,4]
             predictions = self._run_stage(features, proposals, k)
+            # prev_pred_boxes8维的list 表示8张图 
+            # 每张图中存放的是 [256,4] 256表示每张图产生256个框
             prev_pred_boxes = self.box_predictor[k].predict_boxes(predictions, proposals)
             head_outputs.append((self.box_predictor[k], predictions, proposals))
 
@@ -132,7 +142,9 @@ class CustomCascadeROIHeads(CascadeROIHeads):
             return losses
         else:
             # Each is a list[Tensor] of length #image. Each tensor is Ri x (K+1)
+            # 每个类别都有一个对应的score
             scores_per_stage = [h[0].predict_probs(h[1], h[2]) for h in head_outputs]
+            # 同样还是 每个类别都有一个score
             scores = [
                 sum(list(scores_per_image)) * (1.0 / self.num_cascade_stages)
                 for scores_per_image in zip(*scores_per_stage)
@@ -162,6 +174,10 @@ class CustomCascadeROIHeads(CascadeROIHeads):
         if not self.debug:
             del images
         if self.training:
+            # label_and_sample_proposals是定义在standard_roihead里的函数
+            # 把proposal和target关联在一起
+            # 采样后的结果：proposal由2000下降到了256(这个值是人为设定的)
+            # 并且每个proposal都有了一个与他对应的gt
             proposals = self.label_and_sample_proposals(proposals, targets)
 
         if self.training:

@@ -299,6 +299,7 @@ class CenterNet(nn.Module):
             losses['loss_centernet_pos'] = pos_loss
             losses['loss_centernet_neg'] = neg_loss
         # torch.nonzero 输出的非零元素的索引，这里squeeze是减少他的维度
+        # reg_inds的维数，是pos_inds维数的9倍
         reg_inds = torch.nonzero(reg_targets.max(dim=1)[0] >= 0).squeeze(1)
         # 再用索引把预测值给取出来
         reg_pred = reg_pred[reg_inds]
@@ -306,6 +307,7 @@ class CenterNet(nn.Module):
         reg_targets_pos = reg_targets[reg_inds]
         # 这一步是提取最大值，但是只有proposal的情况下，总共就一维，所以是不变的
         reg_weight_map = flattened_hms.max(dim=1)[0]
+        # reg_weight_map的维数，同样也是pos_inds维数的9倍
         reg_weight_map = reg_weight_map[reg_inds]
         # 示例里的no_norm_reg是True 所以这里的reg_weight_map全是1
         reg_weight_map = reg_weight_map * 0 + 1 \
@@ -315,13 +317,14 @@ class CenterNet(nn.Module):
         else:
             reg_norm = max(reduce_sum(reg_weight_map.sum()).item() / num_gpus, 1)
         # reg_weight 默认值是2.0
-        # 计算iou loss
+        # 计算iou loss 这里只计算了有真值的地方的loss，其他地方不管
         reg_loss = self.reg_weight * self.iou_loss(
             reg_pred, reg_targets_pos, reg_weight_map,
             reduction='sum') / reg_norm
         losses['loss_centernet_loc'] = reg_loss
         # 在这里这个设置的是True
         if self.with_agn_hm:
+            # 这里做的就相当于把flattened_hms的第一维给压缩了
             cat_agn_heatmap = flattened_hms.max(dim=1)[0] # M
             # 这里输出的就是centernet的正样本loss和负样本loss
             agn_pos_loss, agn_neg_loss = binary_heatmap_focal_loss_jit(
@@ -759,13 +762,22 @@ class CenterNet(nn.Module):
     def predict_instances(
         self, grids, logits_pred, reg_pred, image_sizes, agn_hm_pred, 
         is_proposal=False):
+        # 这里的logits_pred对应的是agn_hm_pred_per_level reg_pred对应reg_pred_per_level
+        # logits_pred list，level数个[8,1,h,w]，预测的heatmap
+        # reg_pred list，level数个[8,4,h,w]
+        # image_sizes,list 8个(h,w) 存的就是每一张图的长宽
+        # 然后agn_hm_pred是5个none
         sampled_boxes = []
         for l in range(len(grids)):
             sampled_boxes.append(self.predict_single_level(
                 grids[l], logits_pred[l], reg_pred[l] * self.strides[l],
                 image_sizes, agn_hm_pred[l], l, is_proposal=is_proposal))
+        # 原本的boxlists是level数个 图片数个 instance
+        # 现在变成 图片数个 level数个 instance
         boxlists = list(zip(*sampled_boxes))
+        # 再把不同level数上的
         boxlists = [Instances.cat(boxlist) for boxlist in boxlists]
+        # 这里把box nms到200个
         boxlists = self.nms_and_topK(
             boxlists, nms=not self.not_nms)
         return boxlists
@@ -775,6 +787,11 @@ class CenterNet(nn.Module):
     def predict_single_level(
         self, grids, heatmap, reg_pred, image_sizes, agn_hm, level, 
         is_proposal=False):
+        # 这里的heatmap对应的agn_hm_pred_per_level reg_pred是预测值 agn_hm是热图的预测值
+        # heatmap，level数个[8,1,h,w]，预测的heatmap
+        # reg_pred list，level数个[8,4,h,w]
+        # image_sizes,list 8个(h,w) 存的就是每一张图的长宽
+        # 然后agn_hm_pred是5个none
         N, C, H, W = heatmap.shape
         # put in the same format as grids
         if self.center_nms:
@@ -784,41 +801,53 @@ class CenterNet(nn.Module):
         heatmap = heatmap.permute(0, 2, 3, 1) # N x H x W x C
         heatmap = heatmap.reshape(N, -1, C) # N x HW x C
         box_regression = reg_pred.view(N, 4, H, W).permute(0, 2, 3, 1) # N x H x W x 4 
-        box_regression = box_regression.reshape(N, -1, 4)
+        box_regression = box_regression.reshape(N, -1, 4) #  N x HW x 4
 
         candidate_inds = heatmap > self.score_thresh # 0.05
         pre_nms_top_n = candidate_inds.view(N, -1).sum(1) # N
         pre_nms_topk = self.pre_nms_topk_train if self.training else self.pre_nms_topk_test
         pre_nms_top_n = pre_nms_top_n.clamp(max=pre_nms_topk) # N
 
-        if agn_hm is not None:
+        if agn_hm is not None: # 默认值是none
             agn_hm = agn_hm.view(N, 1, H, W).permute(0, 2, 3, 1)
             agn_hm = agn_hm.reshape(N, -1)
             heatmap = heatmap * agn_hm[:, :, None]
 
         results = []
         for i in range(N):
+            # 每一张图中box所属的类别 这里都是一类
             per_box_cls = heatmap[i] # HW x C
+            # 每一个张图的candidate_inds
             per_candidate_inds = candidate_inds[i] # n
+            # 将heat_map值>0.05的box筛选出来
             per_box_cls = per_box_cls[per_candidate_inds] # n
-
+            
+            # .nonzero() 是Python中的函数，返回两个数组
+            # 第一个是非零元素的行索引，第二个是非零元素的列索引
             per_candidate_nonzeros = per_candidate_inds.nonzero() # n
+            # 用第一个数组筛选，得到的是位置
             per_box_loc = per_candidate_nonzeros[:, 0] # n
+            # 用第二个数组筛选，得到的是类别
             per_class = per_candidate_nonzeros[:, 1] # n
 
             per_box_regression = box_regression[i] # HW x 4
+            # 用位置，提取出box的4个维度
             per_box_regression = per_box_regression[per_box_loc] # n x 4
+            # 用位置信息，提取坐标（x,y）
             per_grids = grids[per_box_loc] # n x 2
 
             per_pre_nms_top_n = pre_nms_top_n[i] # 1
 
+            # 看一下 是不是提取的多了
             if per_candidate_inds.sum().item() > per_pre_nms_top_n.item():
+                # .topK是pytorch的函数，作用是按行提取出topk，并输出元素是否为topk的true，False
                 per_box_cls, top_k_indices = \
                     per_box_cls.topk(per_pre_nms_top_n, sorted=False)
                 per_class = per_class[top_k_indices]
                 per_box_regression = per_box_regression[top_k_indices]
                 per_grids = per_grids[top_k_indices]
             
+            # 中心点，加上偏移量
             detections = torch.stack([
                 per_grids[:, 0] - per_box_regression[:, 0],
                 per_grids[:, 1] - per_box_regression[:, 1],

@@ -61,9 +61,9 @@ cfg = get_cfg()   # 加载默认的config
 add_centernet_config(cfg)   # 添加centernet的config
 cfg.merge_from_file("./configs/CenterNet2_R50_1x.yaml")  # 从config_file里合并一部分参数进来
 # cfg.merge_from_file(model_zoo.get_config_file("./configs/CenterNet2_R50_1x.yaml")) #预设档，参数
-cfg.MODEL.ROI_HEADS.NUM_CLASSES=1  #一类
+cfg.MODEL.ROI_HEADS.NUM_CLASSES=5  #一类
 # cfg.MODEL.DEVICE='cpu'  #注释掉此项，系统默认使用NVidia的显卡
-cfg.MODEL.WEIGHTS='./output/CenterNet2/CenterNet2_R50_1x/model_final.pth'
+cfg.MODEL.WEIGHTS='./output-balloon/CenterNet2/CenterNet2_R50_1x/model_final.pth'
 cfg.MODEL.ROI_HEADS.SCORE_THRESH_TEST=0.7
 predictor=DefaultPredictor(cfg)
 val_dicts=DatasetCatalog.get('balloon_val')
