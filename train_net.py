@@ -42,14 +42,14 @@ from centernet.config import add_centernet_config
 from centernet.data.custom_build_augmentation import build_custom_augmentation
 
 logger = logging.getLogger("detectron2")
-os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def default_argument_parser(epilog=None):
     parser = argparse.ArgumentParser(
         epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    parser.add_argument("--config-file", default="./configs/CenterNet2_R50_1x.yaml", metavar="FILE", help="path to config file")
+    parser.add_argument("--config-file", default="configs/My_CenterNet-BiFPN.yaml", metavar="FILE", help="path to config file")
     parser.add_argument("--resume",action="store_true",help="Whether to attempt to resume from the checkpoint directory. "
                         "See documentation of `DefaultTrainer.resume_or_load()` for what it means.",)
     parser.add_argument("--eval-only",action="store_true", help="perform evaluation only")
@@ -61,7 +61,7 @@ def default_argument_parser(epilog=None):
 
     port = 2**15 + 2**14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
     parser.add_argument(
-        "--dist-url",
+        "--dist-uputrl",
         default="tcp://127.0.0.1:{}".format(port),
         help="initialization URL for pytorch distributed backend. See "
         "https://pytorch.org/docs/stable/distributed.html for details.",

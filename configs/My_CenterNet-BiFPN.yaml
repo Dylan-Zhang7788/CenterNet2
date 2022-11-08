@@ -3,7 +3,11 @@ MODEL:
   PROPOSAL_GENERATOR:
     NAME: "CenterNet"
   BACKBONE:
-    NAME: "build_p67_resnet_fpn_backbone"
+    NAME: "build_p35_fcos_dla_bifpn_backbone"
+  BIFPN:
+    OUT_CHANNELS: 160
+    NUM_LEVELS: 3
+    NUM_BIFPN: 4
   WEIGHTS: "detectron2://ImageNetPretrained/MSRA/R-50.pkl"
   RESNETS:
     DEPTH: 50
