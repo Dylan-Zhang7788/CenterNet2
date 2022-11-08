@@ -91,7 +91,9 @@ def setup(args):  # 根据arg得到cfg的一个函数
     cfg.SOLVER.BASE_LR=0.01  #学习率
     cfg.SOLVER.STEPS=(60000,80000,)
     cfg.SOLVER.MAX_ITER=120000  #最大迭代次数
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=512  #default:512 批次大小
+    cfg.SOLVER.CHECKPOINT_PERIOD=40
+    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=256  #default:512 批次大小
+    cfg.SOLVER.RESET_ITER=False
     cfg.freeze()   # 冻结参数
     default_setup(cfg, args) # 初始化一下
     return cfg
