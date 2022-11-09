@@ -3,6 +3,7 @@ slurm*
 # output dir
 output-COCO
 output-balloon
+output-MY-BiFPN
 my_log
 output
 instant_test_output

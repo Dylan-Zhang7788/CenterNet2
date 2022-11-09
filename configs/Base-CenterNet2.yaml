@@ -41,6 +41,8 @@ MODEL:
 DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST: ("coco_2017_val",)
+  # TRAIN: ("voc_2012_trainval",)
+  # TEST: ("voc_2012_val",)
 SOLVER:
   IMS_PER_BATCH: 16
   BASE_LR: 0.02
