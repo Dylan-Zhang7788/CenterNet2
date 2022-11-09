@@ -93,10 +93,10 @@ def setup(args):  # 根据arg得到cfg的一个函数
     cfg.DATASETS.TRAIN=('balloon_train',)  #训练集
     cfg.DATASETS.TEST=('balloon_val',)  #测试集
     cfg.DATALOADER.NUM_WORKERS=8   #执行序，0是cpu
-    cfg.SOLVER.IMS_PER_BATCH=6  #每批次改变的大小
+    cfg.SOLVER.IMS_PER_BATCH=8  #每批次改变的大小
     cfg.SOLVER.BASE_LR=0.01  #学习率
     cfg.SOLVER.STEPS=(4000,8000,)
-    cfg.SOLVER.MAX_ITER=15000  #最大迭代次数
+    cfg.SOLVER.MAX_ITER=20000  #最大迭代次数
     cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=256  #default:512 批次大小
     # cfg.MODEL.WEIGHTS=model_zoo.get_checkpoint_url("COCO-Detection/faster_rcnn_R_50_FPN_3x.yaml")
     # cfg.SOLVER.CHECKPOINT_PERIOD=5000
