@@ -45,32 +45,19 @@ logger = logging.getLogger("detectron2")
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def default_argument_parser(epilog=None):
+    port = 2**15 + 2**14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
     parser = argparse.ArgumentParser(
         epilog=epilog,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("--config-file", default="configs/My_CenterNet-BiFPN.yaml", metavar="FILE", help="path to config file")
-    parser.add_argument("--resume",action="store_true",help="Whether to attempt to resume from the checkpoint directory. "
-                        "See documentation of `DefaultTrainer.resume_or_load()` for what it means.",)
+    parser.add_argument("--resume",action="store_true",help="Whether to attempt to resume from the checkpoint directory.",)
     parser.add_argument("--eval-only",action="store_true", help="perform evaluation only")
     parser.add_argument("--num-gpus", type=int, default=2, help="number of gpus *per machine*")
     parser.add_argument("--num-machines", type=int, default=1, help="total number of machines")
-    parser.add_argument(
-        "--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)"
-    )
-
-    port = 2**15 + 2**14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14
-    parser.add_argument(
-        "--dist-uputrl",
-        default="tcp://127.0.0.1:{}".format(port),
-        help="initialization URL for pytorch distributed backend. See "
-        "https://pytorch.org/docs/stable/distributed.html for details.",
-    )
-    parser.add_argument(
-        "opts",
-        default=None,
-        nargs=argparse.REMAINDER,
-    )
+    parser.add_argument("--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)")
+    parser.add_argument("--dist-uputrl",default="tcp://127.0.0.1:{}".format(port),help="initialization URL for pytorch distributed backend. See""https://pytorch.org/docs/stable/distributed.html for details.",)
+    parser.add_argument("opts",default=None,nargs=argparse.REMAINDER,)
     return parser
 
 def setup(args):  # 根据arg得到cfg的一个函数
