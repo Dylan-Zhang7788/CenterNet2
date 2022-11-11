@@ -23,6 +23,7 @@ from detectron2.engine import default_setup, launch
 from detectron2.evaluation import (
     COCOEvaluator,
     LVISEvaluator,
+    PascalVOCDetectionEvaluator,
     inference_on_dataset,
     print_csv_format,
 )
@@ -57,6 +58,7 @@ def default_argument_parser(epilog=None):
     parser.add_argument("--num-machines", type=int, default=1, help="total number of machines")
     parser.add_argument("--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)")
     parser.add_argument("--dist-uputrl",default="tcp://127.0.0.1:{}".format(port),help="initialization URL for pytorch distributed backend. See""https://pytorch.org/docs/stable/distributed.html for details.",)
+    parser.add_argument("--find_unused_parameters",default=True)
     parser.add_argument("opts",default=None,nargs=argparse.REMAINDER,)
     return parser
 
@@ -73,14 +75,13 @@ def setup(args):  # 根据arg得到cfg的一个函数
         cfg.OUTPUT_DIR = cfg.OUTPUT_DIR.replace('/auto', '/{}'.format(file_name))
         logger.info('OUTPUT_DIR: {}'.format(cfg.OUTPUT_DIR))
     # cfg.MODEL.WEIGHTS="./models/CenterNet2_R50_1x.pth"
-    cfg.DATALOADER.NUM_WORKERS=8   #执行序，0是cpu
-    cfg.SOLVER.IMS_PER_BATCH=8  #每批次改变的大小
-    cfg.SOLVER.BASE_LR=0.01  #学习率
-    cfg.SOLVER.STEPS=(60000,80000,)
-    cfg.SOLVER.MAX_ITER=120000  #最大迭代次数
-    cfg.SOLVER.CHECKPOINT_PERIOD=40
-    cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=256  #default:512 批次大小
-    cfg.SOLVER.RESET_ITER=False
+    # cfg.DATALOADER.NUM_WORKERS=8   #执行序，0是cpu
+    # cfg.SOLVER.IMS_PER_BATCH=16  #每批次改变的大小
+    # cfg.SOLVER.BASE_LR=0.01  #学习率
+    # cfg.SOLVER.STEPS=(60000,80000,)
+    # cfg.SOLVER.MAX_ITER=120000  #最大迭代次数
+    # cfg.SOLVER.CHECKPOINT_PERIOD=40
+    # cfg.MODEL.ROI_HEADS.BATCH_SIZE_PER_IMAGE=256  #default:512 批次大小
     cfg.freeze()   # 冻结参数
     default_setup(cfg, args) # 初始化一下
     return cfg
@@ -105,6 +106,9 @@ def do_test(cfg, model):
             evaluator = LVISEvaluator(dataset_name, cfg, True, output_folder)
         elif evaluator_type == 'coco':
             evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
+        elif evaluator_type == 'pascal_voc':
+            evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
+
         else:
             assert 0, evaluator_type
             
@@ -260,7 +264,7 @@ def main(args):
     if distributed:
         model = DistributedDataParallel(
             model, device_ids=[comm.get_local_rank()], broadcast_buffers=False,
-            find_unused_parameters=True
+            find_unused_parameters=args.find_unused_parameters
         )
 
     do_train(cfg, model, resume=args.resume)  # 上头定义的

@@ -311,6 +311,7 @@ def main(args):
         )
 
     do_train(cfg, model, resume=args.resume)  # 上头定义的
+    print("finish!!!!!!!!!!!!!!!!")
     return do_test(cfg, model)
 
 
