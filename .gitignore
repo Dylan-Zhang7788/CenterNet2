@@ -4,7 +4,7 @@ slurm*
 output-COCO
 output-balloon
 output-MY-BiFPN
-my_log
+my_log/
 output
 instant_test_output
 inference_test_output
@@ -62,3 +62,5 @@ _darcs
 /projects/*/datasets
 /models
 /snippet
+nohup.out
+my_log/train.log
