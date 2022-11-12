@@ -2,6 +2,7 @@ _BASE_: "Base-CenterNet2.yaml"
 MODEL:
   BACKBONE:
     NAME: "build_p35_fcos_dla_bifpn_backbone"
+  WEIGHTS: "models/CenterNet2_DLA-BiFPN-P3_4x.pth"
   BIFPN:
     OUT_CHANNELS: 160
     NUM_LEVELS: 3

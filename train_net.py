@@ -10,6 +10,8 @@ import json
 import argparse
 import sys
 
+from torch.utils.tensorboard import SummaryWriter
+
 from fvcore.common.timer import Timer
 import detectron2.utils.comm as comm
 from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
@@ -41,6 +43,8 @@ from detectron2.data.build import build_detection_train_loader
 
 from centernet.config import add_centernet_config
 from centernet.data.custom_build_augmentation import build_custom_augmentation
+
+from centernet.MY_evaluation.MY_coco_evaluation import MY_COCOEvaluator
 
 logger = logging.getLogger("detectron2")
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
@@ -86,10 +90,9 @@ def setup(args):  # 根据arg得到cfg的一个函数
     default_setup(cfg, args) # 初始化一下
     return cfg
 
-def do_test(cfg, model):
+def do_test(cfg, model,Writer,num):
     # OrderedDict()是一个有序的词典，Python里的函数
     results = OrderedDict()
-
     # 进行数据集的转化
     for dataset_name in cfg.DATASETS.TEST:
         mapper = None if cfg.INPUT.TEST_INPUT_TYPE == 'default' else \
@@ -105,7 +108,8 @@ def do_test(cfg, model):
         if evaluator_type == "lvis":
             evaluator = LVISEvaluator(dataset_name, cfg, True, output_folder)
         elif evaluator_type == 'coco':
-            evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
+            # evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
+            evaluator = MY_COCOEvaluator(dataset_name, cfg, True, output_folder,Writer=Writer,num=num)
         elif evaluator_type == 'pascal_voc':
             evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
 
@@ -222,7 +226,7 @@ def do_train(cfg, model, resume=True):
                 and iteration % cfg.TEST.EVAL_PERIOD == 0
                 and iteration != max_iter
             ):
-                do_test(cfg, model)
+                do_test(cfg, model,Writer=storage,num=iteration)
                 # 定义在detectron2.utils.common.py 里的函数
                 # 当使用分布式训练时，在所有进程之间进行同步（屏蔽）的辅助函数
                 comm.synchronize()
@@ -250,6 +254,10 @@ def main(args):
     # "GeneralizedRCNN"这个类被写在
     model = build_model(cfg)  # modeling.meta_arch.build.py
     logger.info("Model:\n{}".format(model))  # 记录信息的
+    dir=cfg.OUTPUT_DIR + "/eval_result/"
+    My_writer=SummaryWriter(dir)
+    MY_evaluate_num=0
+
     if args.eval_only:  # 如果只用于测试
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
             cfg.MODEL.WEIGHTS, resume=args.resume
@@ -258,7 +266,7 @@ def main(args):
             logger.info("Running inference with test-time augmentation ...")
             model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
 
-        return do_test(cfg, model)  # 如果eval_only=true 那么直接返回do_test
+        return do_test(cfg, model,Writer=My_writer,num=0)  # 如果eval_only=true 那么直接返回do_test
 
     distributed = comm.get_world_size() > 1
     if distributed:
