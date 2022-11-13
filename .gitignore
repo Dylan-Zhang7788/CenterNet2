@@ -1,6 +1,7 @@
 third_party/detectron2
 slurm*
 # output dir
+output*
 output-COCO
 output-balloon
 output-MY-BiFPN

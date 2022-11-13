@@ -45,8 +45,10 @@ from centernet.config import add_centernet_config
 from centernet.data.custom_build_augmentation import build_custom_augmentation
 
 from centernet.MY_evaluation.MY_coco_evaluation import MY_COCOEvaluator
+from centernet.MY_datasets.MY_pascal_voc import MY_register
 
 logger = logging.getLogger("detectron2")
+MY_register()
 # os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def default_argument_parser(epilog=None):

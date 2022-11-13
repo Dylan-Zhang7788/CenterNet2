@@ -3,8 +3,8 @@ MODEL:
   PROPOSAL_GENERATOR:
     NAME: "CenterNet"
   BACKBONE:
-    # NAME: "MY_build_p35_fcos_dla_bifpn_attention_backbone"
-    NAME: "build_p35_fcos_dla_bifpn_backbone"
+    NAME: "MY_build_p35_fcos_dla_bifpn_attention_backbone"
+    # NAME: "build_p35_fcos_dla_bifpn_backbone"
   BIFPN:
     OUT_CHANNELS: 160
     NUM_LEVELS: 3
