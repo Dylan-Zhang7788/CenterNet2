@@ -1,11 +1,17 @@
 from train_net import default_argument_parser, do_test, setup, build_model
 import os
 import torch
-from detectron2.engine import default_setup, launch
-from torch.utils.tensorboard import SummaryWriter
-import logging
-from detectron2.checkpoint import DetectionCheckpointer, PeriodicCheckpointer
+import time
+from detectron2.engine import launch
+from detectron2.checkpoint import DetectionCheckpointer
 from detectron2.modeling.test_time_augmentation import GeneralizedRCNNWithTTA
+from detectron2.utils.events import (
+    CommonMetricPrinter,
+    EventStorage,
+    JSONWriter,
+    TensorboardXWriter,
+)
+from fvcore.common.timer import Timer
 
 def main(args):
     cfg = setup(args) # 前头定义的函数
@@ -16,22 +22,36 @@ def main(args):
     # 并且使用了注册器，注册了"GeneralizedRCNN"
     # "GeneralizedRCNN"这个类被写在
     model = build_model(cfg)  # modeling.meta_arch.build.py
-    dir=cfg.OUTPUT_DIR + "/eval_result/"
-    My_writer=SummaryWriter(dir)
-    MY_evaluate_num=0
-    f_list = os.listdir(cfg.OUTPUT_DIR)
-    for file in enumerate(f_list):
-        if os.path.splitext(file)[1] != '.pth': f_list.remove(file)
-    f_list.sort()
-# print f_list
-    for i, file in enumerate(f_list):
-        # os.path.splitext():分离文件名与扩展名
+    # dir=cfg.OUTPUT_DIR + "/eval_result/"
+    start_iter=0
+    writers = (
+        [
+            JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json")),  # utils.event.py 把指标写进json
+            TensorboardXWriter(cfg.OUTPUT_DIR),
+        ]
+    )
+    with EventStorage(start_iter) as storage:
+        step_timer = Timer()
+        data_timer = Timer()
+        start_time = time.perf_counter()
+        storage.step()
+    
+        f_list = os.listdir("./output-MY-BiFPN")
+        for idx,file in enumerate(f_list):
+            if os.path.splitext(file)[1] != '.pth': f_list.remove(file)
+        f_list.sort()
+        # print f_list
+        for i, file in enumerate(f_list):
+            # os.path.splitext():分离文件名与扩展名
             DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            os.path.join(cfg.OUTPUT_DIR,file), resume=args.resume)
+            os.path.join("./output-MY-BiFPN",file), resume=args.resume)
             if cfg.TEST.AUG.ENABLED:
                 model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
-
-            do_test(cfg, model,Writer=My_writer,num=i) 
+            storage.step()
+            do_test(cfg, model,Writer=storage,num=i) 
+            for writer in writers:
+                writer.write()
+                
 
 if __name__=='__main__':
 

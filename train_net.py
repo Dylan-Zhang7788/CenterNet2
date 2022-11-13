@@ -254,7 +254,7 @@ def main(args):
     # "GeneralizedRCNN"这个类被写在
     model = build_model(cfg)  # modeling.meta_arch.build.py
     logger.info("Model:\n{}".format(model))  # 记录信息的
-    dir=cfg.OUTPUT_DIR + "/eval_result/"
+    dir=cfg.OUTPUT_DIR
     My_writer=SummaryWriter(dir)
     MY_evaluate_num=0
 
