@@ -97,7 +97,8 @@ class MY_COCOeval(COCOeval):
         elif iouType == 'keypoints':
             summarize = _summarizeKps
         self.stats = summarize()
-        self.MY_put_scalar(self.stats)
+        if self.Writer is not None:
+            self.MY_put_scalar(self.stats)
 
 class MY_COCOevalMaxDets(MY_COCOeval):
     def __init__(self,cocoGt=None, cocoDt=None, iouType='segm',*,Writer):
@@ -183,7 +184,8 @@ class MY_COCOevalMaxDets(MY_COCOeval):
         elif iouType == "keypoints":
             summarize = _summarizeKps
         self.stats = summarize()
-        self.MY_put_scalar(self.stats)
+        if self.Writer is not None:
+            self.MY_put_scalar(self.stats)
 
 
 class MY_COCOEvaluator(COCOEvaluator):

@@ -256,9 +256,6 @@ def main(args):
     # "GeneralizedRCNN"这个类被写在
     model = build_model(cfg)  # modeling.meta_arch.build.py
     logger.info("Model:\n{}".format(model))  # 记录信息的
-    dir=cfg.OUTPUT_DIR
-    My_writer=SummaryWriter(dir)
-    MY_evaluate_num=0
 
     if args.eval_only:  # 如果只用于测试
         DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
@@ -268,7 +265,7 @@ def main(args):
             logger.info("Running inference with test-time augmentation ...")
             model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
 
-        return do_test(cfg, model,Writer=My_writer)  # 如果eval_only=true 那么直接返回do_test
+        return do_test(cfg, model,Writer=None)  # 如果eval_only=true 那么直接返回do_test
 
     distributed = comm.get_world_size() > 1
     if distributed:
