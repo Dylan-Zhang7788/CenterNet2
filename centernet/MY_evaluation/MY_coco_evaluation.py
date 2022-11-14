@@ -8,10 +8,9 @@ from pycocotools.cocoeval import COCOeval
 from detectron2.evaluation import COCOEvaluator
 
 class MY_COCOeval(COCOeval):
-    def __init__(self,cocoGt=None, cocoDt=None, iouType='segm',*,Writer,num):
+    def __init__(self,cocoGt=None, cocoDt=None, iouType='segm',*,Writer):
         super().__init__(cocoGt,cocoDt,iouType)
         self.Writer=Writer
-        self.num=num
     def MY_put_scalar(self,stats):
         self.Writer.put_scalar('AP IoU=0.50:0.95',stats[0])
         self.Writer.put_scalar('AP IoU=0.50',stats[1])
@@ -101,8 +100,8 @@ class MY_COCOeval(COCOeval):
         self.MY_put_scalar(self.stats)
 
 class MY_COCOevalMaxDets(MY_COCOeval):
-    def __init__(self,cocoGt=None, cocoDt=None, iouType='segm',*,Writer,num):
-        super().__init__(cocoGt,cocoDt,iouType,Writer,num)
+    def __init__(self,cocoGt=None, cocoDt=None, iouType='segm',*,Writer):
+        super().__init__(cocoGt,cocoDt,iouType,Writer)
 
     def summarize(self):
         """
@@ -189,10 +188,9 @@ class MY_COCOevalMaxDets(MY_COCOeval):
 
 class MY_COCOEvaluator(COCOEvaluator):
 
-    def __init__(self,dataset_name,tasks=None,distributed=True,output_dir=None,*,Writer,num):
+    def __init__(self,dataset_name,tasks=None,distributed=True,output_dir=None,*,Writer):
         super().__init__(dataset_name,tasks,distributed,output_dir)
         self.Writer=Writer
-        self.num=num # 表示评估的次数
 
     def _eval_predictions(self, predictions, img_ids=None):
         """
@@ -247,7 +245,6 @@ class MY_COCOEvaluator(COCOEvaluator):
                     img_ids=img_ids,
                     max_dets_per_image=self._max_dets_per_image,
                     Writer=self.Writer,
-                    num=self.num
                 )
                 if len(coco_results) > 0
                 else None  # cocoapi does not handle empty results very well
@@ -267,7 +264,6 @@ def _MY_evaluate_predictions_on_coco(
     img_ids=None,
     max_dets_per_image=None,
     Writer=None,
-    num=0
 ):
     """
     Evaluate the coco results using COCOEval API.
@@ -284,7 +280,7 @@ def _MY_evaluate_predictions_on_coco(
             c.pop("bbox", None)
 
     coco_dt = coco_gt.loadRes(coco_results)
-    coco_eval = (MY_COCOeval if use_fast_impl else MY_COCOeval)(coco_gt, coco_dt, iou_type,Writer=Writer,num=num)
+    coco_eval = (MY_COCOeval if use_fast_impl else MY_COCOeval)(coco_gt, coco_dt, iou_type,Writer=Writer)
     # For COCO, the default max_dets_per_image is [1, 10, 100].
     if max_dets_per_image is None:
         max_dets_per_image = [1, 10, 100]  # Default from COCOEval
@@ -295,7 +291,7 @@ def _MY_evaluate_predictions_on_coco(
         # In the case that user supplies a custom input for max_dets_per_image,
         # apply COCOevalMaxDets to evaluate AP with the custom input.
         if max_dets_per_image[2] != 100:
-            coco_eval = MY_COCOevalMaxDets(coco_gt, coco_dt, iou_type,Writer=Writer,num=num)
+            coco_eval = MY_COCOevalMaxDets(coco_gt, coco_dt, iou_type,Writer=Writer)
     if iou_type != "keypoints":
         coco_eval.params.maxDets = max_dets_per_image
 

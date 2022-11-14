@@ -92,7 +92,7 @@ def setup(args):  # 根据arg得到cfg的一个函数
     default_setup(cfg, args) # 初始化一下
     return cfg
 
-def do_test(cfg, model,Writer,num):
+def do_test(cfg, model,Writer=None):
     # OrderedDict()是一个有序的词典，Python里的函数
     results = OrderedDict()
     # 进行数据集的转化
@@ -111,7 +111,7 @@ def do_test(cfg, model,Writer,num):
             evaluator = LVISEvaluator(dataset_name, cfg, True, output_folder)
         elif evaluator_type == 'coco':
             # evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
-            evaluator = MY_COCOEvaluator(dataset_name, cfg, True, output_folder,Writer=Writer,num=num)
+            evaluator = MY_COCOEvaluator(dataset_name, cfg, True, output_folder,Writer=Writer)
         elif evaluator_type == 'pascal_voc':
             evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
 
@@ -228,7 +228,7 @@ def do_train(cfg, model, resume=True):
                 and iteration % cfg.TEST.EVAL_PERIOD == 0
                 and iteration != max_iter
             ):
-                do_test(cfg, model,Writer=storage,num=iteration)
+                do_test(cfg, model,Writer=storage)
                 # 定义在detectron2.utils.common.py 里的函数
                 # 当使用分布式训练时，在所有进程之间进行同步（屏蔽）的辅助函数
                 comm.synchronize()
@@ -268,7 +268,7 @@ def main(args):
             logger.info("Running inference with test-time augmentation ...")
             model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
 
-        return do_test(cfg, model,Writer=My_writer,num=0)  # 如果eval_only=true 那么直接返回do_test
+        return do_test(cfg, model,Writer=My_writer)  # 如果eval_only=true 那么直接返回do_test
 
     distributed = comm.get_world_size() > 1
     if distributed:
@@ -278,7 +278,7 @@ def main(args):
         )
 
     do_train(cfg, model, resume=args.resume)  # 上头定义的
-    return do_test(cfg, model)
+    return do_test(cfg, model,Writer=None)
 
 
 if __name__ == "__main__":
