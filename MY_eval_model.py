@@ -1,4 +1,5 @@
 from train_net import default_argument_parser, do_test, setup, build_model
+from collections import OrderedDict
 import os
 import torch
 import time
@@ -11,7 +12,22 @@ from detectron2.utils.events import (
     JSONWriter,
     TensorboardXWriter,
 )
+from detectron2.data import (
+    MetadataCatalog,
+    build_detection_test_loader,
+)
+from detectron2.evaluation import (
+    COCOEvaluator,
+    LVISEvaluator,
+    PascalVOCDetectionEvaluator,
+    inference_on_dataset,
+    print_csv_format,
+)
+from detectron2.data.dataset_mapper import DatasetMapper
 from fvcore.common.timer import Timer
+from centernet.data.custom_build_augmentation import build_custom_augmentation
+from centernet.MY_evaluation.MY_coco_evaluation import MY_COCOEvaluator
+from centernet.MY_datasets.MY_pascal_voc import MY_register
 
 def main(args):
     cfg = setup(args) # 前头定义的函数
@@ -30,15 +46,41 @@ def main(args):
             TensorboardXWriter(cfg.OUTPUT_DIR),
         ]
     )
+# OrderedDict()是一个有序的词典，Python里的函数
+    results = OrderedDict()
+    # 进行数据集的转化
+    for dataset_name in cfg.DATASETS.TEST:
+        mapper = None if cfg.INPUT.TEST_INPUT_TYPE == 'default' else \
+            DatasetMapper(
+                cfg, False, augmentations=build_custom_augmentation(cfg, False))
+        
+        # 加载数据集
+        data_loader = build_detection_test_loader(cfg, dataset_name, mapper=mapper)
+        output_folder = os.path.join(
+            cfg.OUTPUT_DIR, "inference_{}".format(dataset_name))
+        # 确定评估数据集的类型 lvis或者coco
+        evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
+        if evaluator_type == "lvis":
+            evaluator = LVISEvaluator(dataset_name, cfg, True, output_folder)
+        elif evaluator_type == 'coco':
+            # evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
+            evaluator = MY_COCOEvaluator(dataset_name, cfg, True, output_folder,Writer=None)
+        elif evaluator_type == 'pascal_voc':
+            evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
+
+        else:
+            assert 0, evaluator_type
+
     with EventStorage(start_iter) as storage:
         step_timer = Timer()
         data_timer = Timer()
         start_time = time.perf_counter()
         storage.step()
-    
         f_list = os.listdir("./output-MY-BiFPN")
-        for idx,file in enumerate(f_list):
-            if os.path.splitext(file)[1] != '.pth': f_list.remove(file)
+        for file in f_list[:]:
+            if os.path.splitext(file)[1] != '.pth': 
+                f_list.remove(file)
+
         f_list.sort()
         # print f_list
         for i, file in enumerate(f_list):
@@ -48,7 +90,9 @@ def main(args):
             if cfg.TEST.AUG.ENABLED:
                 model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
             storage.step()
-            do_test(cfg, model,Writer=storage,num=i) 
+            evaluator.Writer=storage
+            results[dataset_name] = inference_on_dataset(
+                model, data_loader, evaluator)
             for writer in writers:
                 writer.write()
                 
