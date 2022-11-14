@@ -65,6 +65,7 @@ def default_argument_parser(epilog=None):
     parser.add_argument("--machine-rank", type=int, default=0, help="the rank of this machine (unique per machine)")
     parser.add_argument("--dist-uputrl",default="tcp://127.0.0.1:{}".format(port),help="initialization URL for pytorch distributed backend. See""https://pytorch.org/docs/stable/distributed.html for details.",)
     parser.add_argument("--find_unused_parameters",default=True)
+    parser.add_argument("--start_eval_period",type=int,default=0)
     parser.add_argument("opts",default=None,nargs=argparse.REMAINDER,)
     return parser
 
@@ -225,6 +226,7 @@ def do_train(cfg, model, resume=True):
 
             if (
                 cfg.TEST.EVAL_PERIOD > 0
+                and iteration > args.start_eval_period
                 and iteration % cfg.TEST.EVAL_PERIOD == 0
                 and iteration != max_iter
             ):

@@ -38,12 +38,14 @@ def main(args):
     # 并且使用了注册器，注册了"GeneralizedRCNN"
     # "GeneralizedRCNN"这个类被写在
     model = build_model(cfg)  # modeling.meta_arch.build.py
-    # dir=cfg.OUTPUT_DIR + "/eval_result/"
+    dir=cfg.OUTPUT_DIR + "-eval-result/"
     start_iter=0
+    max_iter = cfg.SOLVER.MAX_ITER
     writers = (
-        [
-            JSONWriter(os.path.join(cfg.OUTPUT_DIR, "metrics.json")),  # utils.event.py 把指标写进json
-            TensorboardXWriter(cfg.OUTPUT_DIR),
+        [ 
+            CommonMetricPrinter(max_iter),
+            TensorboardXWriter(dir),
+            JSONWriter(os.path.join(dir, "metrics.json")),  # utils.event.py 把指标写进json
         ]
     )
 # OrderedDict()是一个有序的词典，Python里的函数
@@ -57,7 +59,7 @@ def main(args):
         # 加载数据集
         data_loader = build_detection_test_loader(cfg, dataset_name, mapper=mapper)
         output_folder = os.path.join(
-            cfg.OUTPUT_DIR, "inference_{}".format(dataset_name))
+            dir, "inference_{}".format(dataset_name))
         # 确定评估数据集的类型 lvis或者coco
         evaluator_type = MetadataCatalog.get(dataset_name).evaluator_type
         if evaluator_type == "lvis":
@@ -76,7 +78,7 @@ def main(args):
         data_timer = Timer()
         start_time = time.perf_counter()
         storage.step()
-        f_list = os.listdir("./output-MY-BiFPN")
+        f_list = os.listdir(cfg.OUTPUT_DIR)
         for file in f_list[:]:
             if os.path.splitext(file)[1] != '.pth': 
                 f_list.remove(file)
@@ -86,7 +88,7 @@ def main(args):
         for i, file in enumerate(f_list):
             # os.path.splitext():分离文件名与扩展名
             DetectionCheckpointer(model, save_dir=cfg.OUTPUT_DIR).resume_or_load(
-            os.path.join("./output-MY-BiFPN",file), resume=args.resume)
+            os.path.join(cfg.OUTPUT_DIR,file), resume=args.resume)
             if cfg.TEST.AUG.ENABLED:
                 model = GeneralizedRCNNWithTTA(cfg, model, batch_size=1)
             storage.step()
