@@ -207,6 +207,7 @@ class SingleBiFPN(Backbone):
         num_output_connections = [0 for _ in in_channels_list]
         for fnode in self.nodes:
             feat_level = fnode["feat_level"]
+            # inputs_offsets 表示某个节点输入的连线数目
             inputs_offsets = fnode["inputs_offsets"]
             inputs_offsets_str = "_".join(map(str, inputs_offsets))
             for input_offset in inputs_offsets:
@@ -224,6 +225,7 @@ class SingleBiFPN(Backbone):
                         "lateral_{}_f{}".format(input_offset, feat_level), lateral_conv
                     )
             node_info.append(out_channels)
+            # num_output_connections 表示某个节点向外的连线数目 节点的编号方法看笔记
             num_output_connections.append(0)
 
             # generate attention weights
@@ -274,7 +276,7 @@ class SingleBiFPN(Backbone):
                     name = "lateral_{}_f{}".format(input_offset, feat_level)
                     input_node = self.__getattr__(name)(input_node)
 
-                # maybe downsample
+                # maybe downsample 如果input_node的size和该层特征的size不一样 就调整成一样的
                 _, _, h, w = input_node.size()
                 if h > target_h and w > target_w:
                     height_stride_size = int((h - 1) // target_h + 1)
@@ -295,7 +297,7 @@ class SingleBiFPN(Backbone):
                     raise NotImplementedError()
                 input_nodes.append(input_node)
 
-            # attention
+            # attention 给输入进来的node添加权重 然后进行加和
             name = "weights_f{}_{}".format(feat_level, inputs_offsets_str)
             weights = F.relu(self.__getattr__(name))
             norm_weights = weights / (weights.sum() + 0.0001)
@@ -305,6 +307,7 @@ class SingleBiFPN(Backbone):
             new_node = swish(new_node)
 
             name = "outputs_f{}_{}".format(feat_level, inputs_offsets_str)
+            # 卷积一下 加入feats中
             feats.append(self.__getattr__(name)(new_node))
 
             num_output_connections.append(0)
@@ -375,15 +378,19 @@ class MY_CBAM_BiFPN(Backbone):
 
         # build bifpn
         self.repeated_bifpn = nn.ModuleList()
-        for i in range(num_repeats):
+        for i in range(num_repeats): # BiFPN要repeat多少次
+            # 最开头的BiFPN进入的特征图通道数是dla输出的特征图通道数
+            # 也就是[128,256,512]
             if i == 0:
                 in_channels_list = [
                     bottom_up_output_shapes[name].channels for name in in_features
                 ]
+            # 第2个 第3个BiFPN block 特征图的通道数就确定了
             else:
                 in_channels_list = [
                     self._out_feature_channels[name] for name in self._out_features
                 ]
+                # in_channels_list=[128,256,512]
             self.repeated_bifpn.append(SingleBiFPN(
                 in_channels_list, out_channels, norm))
             self.repeated_bifpn.append(CBAM())
