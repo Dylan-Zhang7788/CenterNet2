@@ -522,6 +522,6 @@ def MY_build_p37_fcos_dla_bifpn_backbone(cfg, input_shape: ShapeSpec):
         out_channels=out_channels,
         num_top_levels=top_levels,
         num_repeats=num_repeats,
-        norm=cfg.MODEL.MY_CBAM_BiFPN.NORM
+        norm=cfg.MODEL.BiFPN.NORM
     )
     return backbone

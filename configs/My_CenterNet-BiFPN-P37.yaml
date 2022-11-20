@@ -4,22 +4,24 @@ MODEL:
     NAME: "CenterNet"
   BACKBONE:
     # NAME: "MY_build_p35_fcos_dla_bifpn_attention_backbone"
-    NAME: "build_p35_fcos_dla_bifpn_backbone"
+    NAME: "MY_build_p37_fcos_dla_bifpn_backbone"
   BIFPN:
     OUT_CHANNELS: 160
-    NUM_LEVELS: 3
-    NUM_BIFPN: 4
+    NUM_LEVELS: 5
+    NUM_BIFPN: 3
   WEIGHTS: "models/CenterNet2_DLA-BiFPN-P3_4x.pth"
+  PIXEL_MEAN: [123.675, 116.280, 103.530]
+  PIXEL_STD: [58.395, 57.12, 57.375]
   DLA:
     NUM_LAYERS: 34
     NORM: "BN"
   FPN:
     IN_FEATURES: ["dla3", "dla4", "dla5"]
   CENTERNET:  
-    IN_FEATURES: ["p3", "p4", "p5"]
+    IN_FEATURES: ["p3", "p4", "p5", "p6", "p7"]
     POST_NMS_TOPK_TEST: 128
-    FPN_STRIDES: [8, 16, 32]
-    SOI: [[0, 64], [48, 192], [128, 1000000]]
+    FPN_STRIDES: [8, 16, 32, 64, 128]
+    SOI: [[0, 80], [64, 160], [128, 320], [256, 640], [512, 10000000]]
 DATASETS:
   TRAIN: ("coco_2017_train",)
   TEST: ("coco_2017_val",)

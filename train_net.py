@@ -226,7 +226,7 @@ def do_train(cfg, model, resume=True):
 
             if (
                 cfg.TEST.EVAL_PERIOD > 0
-                and iteration > args.start_eval_period
+                and iteration > 9999999
                 and iteration % cfg.TEST.EVAL_PERIOD == 0
                 and iteration != max_iter
             ):
