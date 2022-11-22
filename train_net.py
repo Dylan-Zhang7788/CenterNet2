@@ -45,6 +45,7 @@ from centernet.config import add_centernet_config
 from centernet.data.custom_build_augmentation import build_custom_augmentation
 
 from centernet.MY_evaluation.MY_coco_evaluation import MY_COCOEvaluator
+from centernet.MY_evaluation.MY_pascal_voc_evaluation import MY_PascalVOCDetectionEvaluator
 from centernet.MY_datasets.MY_pascal_voc import MY_register
 
 logger = logging.getLogger("detectron2")
@@ -114,8 +115,8 @@ def do_test(cfg, model,Writer=None):
             # evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
             evaluator = MY_COCOEvaluator(dataset_name, cfg, True, output_folder,Writer=Writer)
         elif evaluator_type == 'pascal_voc':
-            evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
-
+            # evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
+            evaluator = MY_PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
         else:
             assert 0, evaluator_type
             
