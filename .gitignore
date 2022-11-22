@@ -63,5 +63,5 @@ _darcs
 /projects/*/datasets
 /models
 /snippet
-nohup.out
+*.out
 my_log/train.log
