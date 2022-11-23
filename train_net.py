@@ -114,9 +114,9 @@ def do_test(cfg, model,Writer=None):
         elif evaluator_type == 'coco':
             # evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
             evaluator = MY_COCOEvaluator(dataset_name, cfg, True, output_folder,Writer=Writer)
-        elif evaluator_type == 'pascal_voc':
+        elif evaluator_type == 'MY_pascal_voc':
             # evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
-            evaluator = MY_PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
+            evaluator = MY_PascalVOCDetectionEvaluator(dataset_name)
         else:
             assert 0, evaluator_type
             

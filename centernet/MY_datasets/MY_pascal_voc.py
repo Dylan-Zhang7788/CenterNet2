@@ -55,7 +55,7 @@ def MY_load_voc_instances(dirname: str, split: str, class_names: Union[List[str]
 def MY_register_pascal_voc(name, dirname, split, year, class_names=CLASS_NAMES):
     DatasetCatalog.register(name, lambda: MY_load_voc_instances(dirname, split, class_names))
     MetadataCatalog.get(name).set(
-        thing_classes=list(class_names), dirname=dirname, year=year, split=split
+        thing_classes=list(class_names), dirname=dirname, year=year, split=split, evaluator_type="MY_pascal_voc"
     )
 
 def MY_register():
