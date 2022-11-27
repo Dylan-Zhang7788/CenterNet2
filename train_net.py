@@ -50,7 +50,7 @@ from centernet.MY_datasets.MY_pascal_voc import MY_register
 
 logger = logging.getLogger("detectron2")
 MY_register()
-# os.environ["CUDA_VISIBLE_DEVICES"] = "1"
+os.environ["CUDA_VISIBLE_DEVICES"] = "1"
 
 def default_argument_parser(epilog=None):
     port = 2**15 + 2**14 + hash(os.getuid() if sys.platform != "win32" else 1) % 2**14

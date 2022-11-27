@@ -59,4 +59,4 @@ def MY_register_pascal_voc(name, dirname, split, year, class_names=CLASS_NAMES):
     )
 
 def MY_register():
-    for d in ['train','val']: MY_register_pascal_voc('voc_2012_Layout_'+d, 'datasets/VOC2012/', d, 2012)
+    for d in ['trainval','val']: MY_register_pascal_voc('voc_2012_Layout_'+d, 'datasets/VOC2012/', d, 2012)

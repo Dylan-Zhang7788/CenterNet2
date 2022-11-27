@@ -127,8 +127,9 @@ def voc_eval(detpath, annopath, imagesetfile, classname, ovthresh=0.5, use_07_me
     return rec, prec, ap
 
 class MY_PascalVOCDetectionEvaluator(PascalVOCDetectionEvaluator):
-    def __init__(self, dataset_name):
+    def __init__(self, dataset_name,Writer=None):
         super().__init__(dataset_name)
+        self.Writer=Writer
         self._dataset_name = dataset_name
         meta = MetadataCatalog.get(dataset_name)
         # Too many tiny files, download all to local for speed.
@@ -142,6 +143,11 @@ class MY_PascalVOCDetectionEvaluator(PascalVOCDetectionEvaluator):
         self._is_2007 = meta.year == 2007
         self._cpu_device = torch.device("cpu")
         self._logger = logging.getLogger(__name__)
+
+    def MY_put_scalar(self,class_name,stats):
+        self.Writer.put_scalar('AP IoU=0.50:0.95,class:{}'.format(class_name),stats[0])
+        self.Writer.put_scalar('AP IoU=0.50,class:{}'.format(class_name),stats[1])
+        self.Writer.put_scalar('AP IoU=0.75,class:{}'.format(class_name),stats[2])
 
     def evaluate(self):
         """
@@ -167,6 +173,7 @@ class MY_PascalVOCDetectionEvaluator(PascalVOCDetectionEvaluator):
         with tempfile.TemporaryDirectory(prefix="pascal_voc_eval_") as dirname:
             res_file_template = os.path.join(dirname, "{}.txt")
             class_AP={}
+            stats=[]
             aps = defaultdict(list)  # iou -> ap per class
             for cls_id, cls_name in enumerate(self._class_names):
                 lines = predictions.get(cls_id, [""])
@@ -186,6 +193,13 @@ class MY_PascalVOCDetectionEvaluator(PascalVOCDetectionEvaluator):
                     aps[thresh].append(ap * 100)
                 mAP = {iou: np.mean(x) for iou, x in aps.items()}
                 class_AP[cls_name]={"AP": np.mean(list(mAP.values())), "AP50": mAP[50], "AP75": mAP[75]}
+               
+                if self.Writer is not None:
+                    stats[0]=np.mean(list(mAP.values()))
+                    stats[1]=mAP[50]
+                    stats[2]=mAP[75]
+                    self.MY_put_scalar(cls_name,stats)
+             
         
         print(class_AP)        
         ret = OrderedDict()

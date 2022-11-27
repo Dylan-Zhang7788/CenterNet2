@@ -9,6 +9,8 @@ from detectron2.layers import Conv2d, ShapeSpec, get_norm
 from detectron2.modeling.backbone import Backbone, build_resnet_backbone
 from detectron2.modeling import BACKBONE_REGISTRY
 from .dlafpn import dla34
+from .res2net import build_res2net_backbone
+from .bifpn import BiFPN
 
 __all__ = []
 
@@ -454,7 +456,7 @@ def MY_build_fcos_resnet_bifpn_backbone(cfg, input_shape: ShapeSpec):
     return backbone
 
 @BACKBONE_REGISTRY.register()
-def MY_build_p35_fcos_resnet_bifpn_backbone(cfg, input_shape: ShapeSpec):
+def MY_build_p37_fcos_resnet_bifpn_backbone(cfg, input_shape: ShapeSpec):
     """
     Args:
         cfg: a detectron2 CfgNode
@@ -465,7 +467,8 @@ def MY_build_p35_fcos_resnet_bifpn_backbone(cfg, input_shape: ShapeSpec):
     in_features = cfg.MODEL.FPN.IN_FEATURES
     out_channels = cfg.MODEL.BIFPN.OUT_CHANNELS
     num_repeats = cfg.MODEL.BIFPN.NUM_BIFPN
-    top_levels = 0
+    assert cfg.MODEL.BIFPN.NUM_LEVELS == 5
+    top_levels = 2
 
     backbone = MY_CBAM_BiFPN(
         bottom_up=bottom_up,
@@ -522,6 +525,6 @@ def MY_build_p37_fcos_dla_bifpn_backbone(cfg, input_shape: ShapeSpec):
         out_channels=out_channels,
         num_top_levels=top_levels,
         num_repeats=num_repeats,
-        norm=cfg.MODEL.BiFPN.NORM
+        norm=cfg.MODEL.BIFPN.NORM
     )
     return backbone

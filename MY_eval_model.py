@@ -27,6 +27,7 @@ from detectron2.data.dataset_mapper import DatasetMapper
 from fvcore.common.timer import Timer
 from centernet.data.custom_build_augmentation import build_custom_augmentation
 from centernet.MY_evaluation.MY_coco_evaluation import MY_COCOEvaluator
+from centernet.MY_evaluation.MY_pascal_voc_evaluation import MY_PascalVOCDetectionEvaluator
 from centernet.MY_datasets.MY_pascal_voc import MY_register
 
 def main(args):
@@ -67,8 +68,8 @@ def main(args):
         elif evaluator_type == 'coco':
             # evaluator = COCOEvaluator(dataset_name, cfg, True, output_folder)
             evaluator = MY_COCOEvaluator(dataset_name, cfg, True, output_folder,Writer=None)
-        elif evaluator_type == 'pascal_voc':
-            evaluator = PascalVOCDetectionEvaluator(dataset_name, cfg, True, output_folder)
+        elif evaluator_type == 'MY_pascal_voc':
+            evaluator = MY_PascalVOCDetectionEvaluator(dataset_name,Writer=None)
 
         else:
             assert 0, evaluator_type
