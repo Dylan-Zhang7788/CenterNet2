@@ -18,6 +18,7 @@ from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from detectron2.layers.batch_norm import get_norm
 from detectron2.modeling.backbone import Backbone
 from .dlafpn import dla34
+from .MY_bifpn_fcos_attentioin import CBAM
 
 def get_fpn_config(base_reduction=8):
     """BiFPN config with sum."""
@@ -413,6 +414,127 @@ def build_p37_dla_bifpn_backbone(cfg, input_shape: ShapeSpec):
     assert cfg.MODEL.BIFPN.NUM_LEVELS == 5
 
     backbone = BiFPN(
+        cfg=cfg,
+        bottom_up=bottom_up,
+        in_features=in_features,
+        out_channels=cfg.MODEL.BIFPN.OUT_CHANNELS,
+        norm=cfg.MODEL.BIFPN.NORM,
+        num_levels=cfg.MODEL.BIFPN.NUM_LEVELS,
+        num_bifpn=cfg.MODEL.BIFPN.NUM_BIFPN,
+        separable_conv=cfg.MODEL.BIFPN.SEPARABLE_CONV,
+    )
+    return backbone
+
+
+class MY_BiFPN_ATTENTION(Backbone):
+    def __init__(
+        self, cfg, bottom_up, in_features, out_channels, norm='', 
+        num_levels=5, num_bifpn=4, separable_conv=False,
+    ):
+        super(MY_BiFPN_ATTENTION, self).__init__()
+        assert isinstance(bottom_up, Backbone)
+        
+        # Feature map strides and channels from the bottom up network (e.g. ResNet)
+        input_shapes = bottom_up.output_shape()
+        in_strides = [input_shapes[f].stride for f in in_features]
+        in_channels = [input_shapes[f].channels for f in in_features]
+
+        self.num_levels = num_levels
+        self.num_bifpn = num_bifpn
+        self.bottom_up = bottom_up
+        self.in_features = in_features
+        self._size_divisibility = 128
+        levels = [int(math.log2(s)) for s in in_strides]
+        self._out_feature_strides = {
+            "p{}".format(int(math.log2(s))): s for s in in_strides}
+        if len(in_features) < num_levels:
+            for l in range(num_levels - len(in_features)):
+                s = l + levels[-1]
+                self._out_feature_strides["p{}".format(s + 1)] = 2 ** (s + 1)
+        self._out_features = list(sorted(self._out_feature_strides.keys()))
+        self._out_feature_channels = {k: out_channels for k in self._out_features}
+        
+        # print('self._out_feature_strides', self._out_feature_strides)
+        # print('self._out_feature_channels', self._out_feature_channels)
+        
+        feature_info = [
+            {'num_chs': in_channels[level], 'reduction': in_strides[level]} \
+            for level in range(len(self.in_features))
+        ]
+        # self.config = config
+        fpn_config = get_fpn_config()
+        self.resample = SequentialAppendLast()
+        for level in range(num_levels):
+            if level < len(feature_info):
+                in_chs = in_channels[level] # feature_info[level]['num_chs']
+                reduction = in_strides[level] # feature_info[level]['reduction']
+            else:
+                # Adds a coarser level by downsampling the last feature map
+                reduction_ratio = 2
+                self.resample.add_module(str(level), ResampleFeatureMap(
+                    in_channels=in_chs,
+                    out_channels=out_channels,
+                    pad_type='same',
+                    pooling_type=None,
+                    norm=norm,
+                    reduction_ratio=reduction_ratio,
+                    apply_bn=True,
+                    conv_after_downsample=False,
+                    redundant_bias=False,
+                ))
+                in_chs = out_channels
+                reduction = int(reduction * reduction_ratio)
+                feature_info.append(dict(num_chs=in_chs, reduction=reduction))
+
+        self.cell = nn.Sequential()
+        for rep in range(self.num_bifpn):
+            # logging.debug('building cell {}'.format(rep))
+            # print('building cell {}'.format(rep))
+            fpn_layer = BiFpnLayer(
+                feature_info=feature_info,
+                fpn_config=fpn_config,
+                fpn_channels=out_channels,
+                num_levels=self.num_levels,
+                pad_type='same',
+                pooling_type=None,
+                norm=norm,
+                act_layer=Swish,
+                separable_conv=separable_conv,
+                apply_bn_for_resampling=True,
+                conv_after_downsample=False,
+                conv_bn_relu_pattern=False,
+                redundant_bias=False,
+            )
+            self.cell.add_module(str(rep), fpn_layer)
+            # self.cell.add_module(str(rep),CBAM())
+            feature_info = fpn_layer.feature_info
+        # import pdb; pdb.set_trace()
+
+    @property
+    def size_divisibility(self):
+        return self._size_divisibility
+
+    def forward(self, x):
+        # print('input shapes', x.shape)
+        bottom_up_features = self.bottom_up(x)
+        x = [bottom_up_features[f] for f in self.in_features]
+        assert len(self.resample) == self.num_levels - len(x)
+        x = self.resample(x)
+        shapes = [xx.shape for xx in x]
+        # print('resample shapes', shapes)
+        x = self.cell(x)
+        out = {f: xx for f, xx in zip(self._out_features, x)}
+        # import pdb; pdb.set_trace()
+        return out
+
+# 这个是我自己的函数
+@BACKBONE_REGISTRY.register()
+def MY_build_resnet_bifpn_backbone_attention(cfg, input_shape: ShapeSpec):
+    bottom_up = build_resnet_backbone(cfg, input_shape)
+    in_features = cfg.MODEL.FPN.IN_FEATURES
+    assert cfg.MODEL.BIFPN.NUM_LEVELS == 5
+
+    backbone = MY_BiFPN_ATTENTION(
         cfg=cfg,
         bottom_up=bottom_up,
         in_features=in_features,
