@@ -2,7 +2,7 @@ _BASE_: "Base-CenterNet2.yaml"
 MODEL:
   CENTERNET:
     USE_DEFORMABLE: True
-  WEIGHTS: "detectron2://ImageNetPretrained/FAIR/X-101-32x8d.pkl"
+  WEIGHTS: "models/CenterNet2_X101-DCN_2x.pth"
   PIXEL_STD: [57.375, 57.120, 58.395]
   RESNETS:
     STRIDE_IN_1X1: False

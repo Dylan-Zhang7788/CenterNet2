@@ -18,7 +18,7 @@ from detectron2.modeling.backbone.build import BACKBONE_REGISTRY
 from detectron2.layers.batch_norm import get_norm
 from detectron2.modeling.backbone import Backbone
 from .dlafpn import dla34
-from .MY_bifpn_fcos_attentioin import CBAM
+from .MY_bifpn_fcos_attentioin import CBAM, SingleBiFPN, FeatureMapResampler
 
 def get_fpn_config(base_reduction=8):
     """BiFPN config with sum."""
@@ -454,78 +454,55 @@ class MY_BiFPN_ATTENTION(Backbone):
         self._out_features = list(sorted(self._out_feature_strides.keys()))
         self._out_feature_channels = {k: out_channels for k in self._out_features}
         
-        # print('self._out_feature_strides', self._out_feature_strides)
-        # print('self._out_feature_channels', self._out_feature_channels)
-        
-        feature_info = [
-            {'num_chs': in_channels[level], 'reduction': in_strides[level]} \
-            for level in range(len(self.in_features))
-        ]
-        # self.config = config
-        fpn_config = get_fpn_config()
-        self.resample = SequentialAppendLast()
-        for level in range(num_levels):
-            if level < len(feature_info):
-                in_chs = in_channels[level] # feature_info[level]['num_chs']
-                reduction = in_strides[level] # feature_info[level]['reduction']
-            else:
-                # Adds a coarser level by downsampling the last feature map
-                reduction_ratio = 2
-                self.resample.add_module(str(level), ResampleFeatureMap(
-                    in_channels=in_chs,
-                    out_channels=out_channels,
-                    pad_type='same',
-                    pooling_type=None,
-                    norm=norm,
-                    reduction_ratio=reduction_ratio,
-                    apply_bn=True,
-                    conv_after_downsample=False,
-                    redundant_bias=False,
+        # add extra 2 levels # 这个地方直接写数字！！！！！偷懒了 后面要改！！！！不然没法复用了
+        if len(self.in_features) < num_levels:
+            prev_channels=2048
+            out_channels=160
+            for i in range(2):
+                name = "res" + str(5 + i + 1)
+                self.bottom_up.add_module(name, FeatureMapResampler(
+                    prev_channels, out_channels, 2, norm
                 ))
-                in_chs = out_channels
-                reduction = int(reduction * reduction_ratio)
-                feature_info.append(dict(num_chs=in_chs, reduction=reduction))
+                prev_channels = out_channels
 
-        self.cell = nn.Sequential()
-        for rep in range(self.num_bifpn):
-            # logging.debug('building cell {}'.format(rep))
-            # print('building cell {}'.format(rep))
-            fpn_layer = BiFpnLayer(
-                feature_info=feature_info,
-                fpn_config=fpn_config,
-                fpn_channels=out_channels,
-                num_levels=self.num_levels,
-                pad_type='same',
-                pooling_type=None,
-                norm=norm,
-                act_layer=Swish,
-                separable_conv=separable_conv,
-                apply_bn_for_resampling=True,
-                conv_after_downsample=False,
-                conv_bn_relu_pattern=False,
-                redundant_bias=False,
-            )
-            self.cell.add_module(str(rep), fpn_layer)
-            # self.cell.add_module(str(rep),CBAM())
-            feature_info = fpn_layer.feature_info
-        # import pdb; pdb.set_trace()
+                self.bottom_up._out_feature_channels[name] = out_channels
+                self.bottom_up._out_feature_strides[name] = 32 * 2 ** (i + 1)
+                self.bottom_up._out_features.append(name)
+            self.in_features.append("res6")
+            self.in_features.append("res7")
+            input_shapes = self.bottom_up.output_shape()
 
-    @property
-    def size_divisibility(self):
-        return self._size_divisibility
+        # build bifpn
+        self.repeated_bifpn = nn.ModuleList()
+        for i in range(self.num_bifpn): # BiFPN要repeat多少次
+            # 最开头的BiFPN进入的特征图通道数是dla输出的特征图通道数
+            # 也就是[128,256,512]
+            if i == 0:
+                in_channels_list = [
+                    input_shapes[name].channels for name in self.in_features
+                ]
+            # 第2个 第3个BiFPN block 特征图的通道数就确定了
+            else:
+                in_channels_list = [
+                    self._out_feature_channels[name] for name in self._out_features
+                ]
+                # in_channels_list=[128,256,512]
+            self.repeated_bifpn.append(SingleBiFPN(in_channels_list, out_channels, norm))
+            self.repeated_bifpn.append(CBAM())       
 
     def forward(self, x):
         # print('input shapes', x.shape)
         bottom_up_features = self.bottom_up(x)
-        x = [bottom_up_features[f] for f in self.in_features]
-        assert len(self.resample) == self.num_levels - len(x)
-        x = self.resample(x)
-        shapes = [xx.shape for xx in x]
-        # print('resample shapes', shapes)
-        x = self.cell(x)
-        out = {f: xx for f, xx in zip(self._out_features, x)}
-        # import pdb; pdb.set_trace()
-        return out
+        x = self.bottom_up.__getattr__("res6")(bottom_up_features["res5"])
+        bottom_up_features["res6"] = x
+        x = self.bottom_up.__getattr__("res7")(x)
+        bottom_up_features["res7"] = x
+        feats = [bottom_up_features[f] for f in self.in_features]
+
+        for bifpn in self.repeated_bifpn:
+             feats = bifpn(feats)
+
+        return dict(zip(self._out_features, feats))
 
 # 这个是我自己的函数
 @BACKBONE_REGISTRY.register()
