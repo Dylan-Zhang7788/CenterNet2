@@ -1,5 +1,6 @@
 import numpy as np
 import os
+import cv2
 import xml.etree.ElementTree as ET
 from typing import List, Tuple, Union
 
@@ -38,17 +39,21 @@ def MY_load_voc_instances(dirname: str, split: str, class_names: Union[List[str]
 
         for obj in tree.findall("object"):
             if obj.find("name").text == "person":
+                # img=cv2.imread(jpeg_file)
                 for part in obj.findall("part"):
                     cls=part.find("name").text
-                    bbox = obj.find("bndbox")
+                    bbox = part.find("bndbox")
                     bbox = [float(bbox.find(x).text) for x in ["xmin", "ymin", "xmax", "ymax"]]
                     bbox[0] -= 1.0
                     bbox[1] -= 1.0
+                    # cv2.circle(img, (int(bbox[0]),int(bbox[1])), 3, (255, 0, 0), 3)
+                    # cv2.circle(img, (int(bbox[2]),int(bbox[3])), 3, (255, 0, 0), 3)
                     instances.append(
                         {"category_id": class_names.index(cls), "bbox": bbox, "bbox_mode": BoxMode.XYXY_ABS}
                     )
                 r["annotations"] = instances
                 dicts.append(r)
+                # cv2.imwrite(os.path.join("/home/zhangdi/zhangdi_ws/CenterNet2/AAA", fileid[0] + ".jpg"),img)
     return dicts
 
 
@@ -59,4 +64,4 @@ def MY_register_pascal_voc(name, dirname, split, year, class_names=CLASS_NAMES):
     )
 
 def MY_register():
-    for d in ['trainval','val']: MY_register_pascal_voc('voc_2012_Layout_'+d, 'datasets/VOC2012/', d, 2012)
+    for d in ['train','val','trainval']: MY_register_pascal_voc('voc_2012_Layout_'+d, 'datasets/VOC2012/', d, 2012)

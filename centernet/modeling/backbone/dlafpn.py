@@ -158,7 +158,7 @@ class Tree(nn.Module):
         self.project = None
         self.levels = levels
         if stride > 1:
-            self.downsample = nn.MaxPool2d(stride, stride=stride)
+            self.downsample = nn.MaxPool2d(stride, stride=stride,ceil_mode=True)
         if in_channels != out_channels:
             self.project = nn.Sequential(
                 nn.Conv2d(in_channels, out_channels,

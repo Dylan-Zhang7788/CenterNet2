@@ -65,3 +65,5 @@ _darcs
 /snippet
 *.out
 my_log/train.log
+eval_COCO/
+img

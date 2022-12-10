@@ -525,3 +525,10 @@ def MY_build_p37_fcos_dla_bifpn_backbone(cfg, input_shape: ShapeSpec):
         norm=cfg.MODEL.BIFPN.NORM
     )
     return backbone
+
+@BACKBONE_REGISTRY.register()
+def MY_build_dla_backbone(cfg, input_shape: ShapeSpec):
+     bottom_up = dla34(cfg)
+     backbone = bottom_up
+
+     return backbone

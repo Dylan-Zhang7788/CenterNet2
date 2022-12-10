@@ -23,7 +23,7 @@ def parse_rec(filename):
         if obj.find("name").text == "person":
             for part in obj.findall("part"):
                 obj_struct["name"]=part.find("name").text
-                bbox = obj.find("bndbox")
+                bbox = part.find("bndbox")
                 obj_struct["bbox"] = [
                     int(bbox.find("xmin").text),
                     int(bbox.find("ymin").text),
