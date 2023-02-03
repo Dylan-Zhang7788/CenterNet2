@@ -418,10 +418,10 @@ class MY_CBAM_BiFPN(Backbone):
 
         return dict(zip(self._out_features, feats))
 
-class PSPModule(nn.Module):
+class MY_PSPModule(nn.Module):
     # (1, 2, 3, 6)
     def __init__(self, sizes=(1, 3, 6, 8), dimension=2):
-        super(PSPModule, self).__init__()
+        super(MY_PSPModule, self).__init__()
         self.stages = nn.ModuleList([self._make_stage(size, dimension) for size in sizes])
 
     def _make_stage(self, size, dimension=2):
@@ -437,7 +437,6 @@ class PSPModule(nn.Module):
         # feats: [1,256,129,257]
         n, c, _, _ = feats.size()
         # 分别将特征图池化为1*1 3*3 6*6 8*8，然后铺平（看笔记）
-        feats_r= [stage(feats) for stage in self.stages]
         priors = [stage(feats).view(n, c, -1) for stage in self.stages]
         # 首尾相连一下
         center = torch.cat(priors, -1)
@@ -467,7 +466,7 @@ class MY_PAN_BiFPN(Backbone):
             num_repeats (int): the number of repeats of MY_CBAM_BiFPN.
             norm (str): the normalization to use.
         """
-        super(MY_CBAM_BiFPN, self).__init__()
+        super(MY_PAN_BiFPN, self).__init__()
         assert isinstance(bottom_up, Backbone)
         # add extra feature levels (i.e., 6 and 7)
         self.bottom_up = BackboneWithTopLevels(
@@ -494,8 +493,27 @@ class MY_PAN_BiFPN(Backbone):
             for out_name, in_name in zip(self._out_features, in_features)
         }
         self._out_feature_channels = {k: out_channels for k in self._out_features}
-
+        self.psp=MY_PSPModule()
+        self.f_key = nn.Sequential(
+            nn.Conv2d(in_channels=160, out_channels=160,
+                      kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(160),
+            nn.ReLU()
+        )
+        # 本项目中 nn.Conv2d(in_channels=2048,out_channels=256)
+        self.f_query = nn.Sequential(
+            nn.Conv2d(in_channels=160, out_channels=160,
+                      kernel_size=3, stride=1, padding=1),
+            nn.BatchNorm2d(160),
+            nn.ReLU()
+        )
+        # 本项目中 nn.Conv2d(in_channels=1024,out_channels=256)
+        self.f_value = nn.Conv2d(in_channels=160, out_channels=160,
+                                 kernel_size=1, stride=1, padding=0)
+        self.W = nn.Conv2d(in_channels=160, out_channels=160,
+                           kernel_size=1, stride=1, padding=0)
         # build bifpn
+        self.upsample=nn.ConvTranspose2d(in_channels=160,out_channels=160,kernel_size=3,padding=1,stride=2)
         self.repeated_bifpn = nn.ModuleList()
         for i in range(num_repeats): # BiFPN要repeat多少次
             # 最开头的BiFPN进入的特征图通道数是dla输出的特征图通道数
@@ -512,7 +530,6 @@ class MY_PAN_BiFPN(Backbone):
                 # in_channels_list=[128,256,512]
             self.repeated_bifpn.append(SingleBiFPN(
                 in_channels_list, out_channels, norm))
-            self.repeated_bifpn.append(CBAM())
 
     @property
     def size_divisibility(self):
@@ -532,16 +549,39 @@ class MY_PAN_BiFPN(Backbone):
         """
         bottom_up_features = self.bottom_up(x)
         feats = [bottom_up_features[f] for f in self.in_features]
-        feat_value=[]
-        feat_key=[]
+        feats_value=[]
+        feats_key=[]
         for i, bifpn in enumerate(self.repeated_bifpn):
             feats = bifpn(feats)
             if i == 0 : pass 
             else:
-                for feat in feats:
-                    feat
+                for j,feat in enumerate(feats):
+                    if j==0:
+                        feat_upsample=self.upsample(feat)
+                        feat_value=self.psp(self.f_value(feat_upsample)).permute(0, 2, 1)
+                        feat_key=self.psp(self.f_key(feat_upsample))
+                        feats_value.append(feat_value)
+                        feats_key.append(feat_key)
+                    feat_value=self.f_value(feat)
+                    feat_value=self.psp(feat_value).permute(0, 2, 1)
+                    feat_key=self.psp(self.f_key(feat))
+                    feats_value.append(feat_value)
+                    feats_key.append(feat_key)
+                for k, feat in enumerate(feats):
+                    if k != 4:
+                        ith_value = torch.cat([feats_value[q] for q in range(k,k+3)],dim=1)
+                        ith_key = torch.cat([feats_key[q] for q in range(k,k+3)],dim=-1)
+                        ith_query = feat.view(feat.shape[0],feat.shape[1],-1).permute(0,2,1)                        
+                        sim_map = torch.matmul(ith_query, ith_key) # 张量（矩阵）相乘
+                        sim_map = (0.00625) * sim_map
+                        sim_map = F.softmax(sim_map, dim=-1)
 
-
+                        context = torch.matmul(sim_map, ith_value)
+                        context = context.permute(0, 2, 1).contiguous()
+                        context = context.view(feat.shape[0], feat.shape[1], feat.shape[2],feat.shape[3])
+                        context = self.W(context)
+                        feats[k] = context
+                        
         return dict(zip(self._out_features, feats))
 
 def _assert_strides_are_log2_contiguous(strides):
@@ -641,7 +681,7 @@ def MY_build_p37_fcos_dla_bifpn_backbone(cfg, input_shape: ShapeSpec):
     assert cfg.MODEL.BIFPN.NUM_LEVELS == 5
     top_levels = 2
 
-    backbone = MY_CBAM_BiFPN(
+    backbone = MY_PAN_BiFPN(
         bottom_up=bottom_up,
         in_features=in_features,
         out_channels=out_channels,
