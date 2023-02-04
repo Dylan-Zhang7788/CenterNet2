@@ -681,7 +681,7 @@ def MY_build_p37_fcos_dla_bifpn_backbone(cfg, input_shape: ShapeSpec):
     assert cfg.MODEL.BIFPN.NUM_LEVELS == 5
     top_levels = 2
 
-    backbone = MY_PAN_BiFPN(
+    backbone = MY_CBAM_BiFPN(
         bottom_up=bottom_up,
         in_features=in_features,
         out_channels=out_channels,
