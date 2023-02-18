@@ -553,7 +553,7 @@ class MY_PAN_BiFPN(Backbone):
         feats_key=[]
         for i, bifpn in enumerate(self.repeated_bifpn):
             feats = bifpn(feats)
-            if i == 0 : pass 
+            if i <= 1 : pass 
             else:
                 for j,feat in enumerate(feats):
                     if j==0:
