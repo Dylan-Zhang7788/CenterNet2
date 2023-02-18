@@ -400,7 +400,7 @@ class CenterNet(nn.Module):
         # shapes_per_level.new_ones(num_loc_list[l]) 尺寸和num_loc_list[l]一样
         # 类型和shapes_per_level一样，然后全是1 
         # self.strides[l] 就是(8,16,32,64,128)
-        # strides 是把这些都连起来了 假设这个shape是M
+        # strides 是把这些都连起来了 strides的shape是M，M = num_loc_list 所有元素的值相加 
         # strides = [8,8,8,8,8...16,16,16.......128,128,128]
         # 一共有num_loc_list[0]个8，num_loc_list[1]个16....num_loc_list[4]个128
         strides = torch.cat([
@@ -434,7 +434,7 @@ class CenterNet(nn.Module):
                 continue
 
             # 这里好像用到了广播机制
-            # l是left t是top r是right b是bottom 也就是box边框距离grid点的位置（似乎还没牵扯到真值）
+            # l是left t是top r是right b是bottom 也就是box边框距离grid点的位置
             l = grids[:, 0].view(M, 1) - boxes[:, 0].view(1, N) # M x N
             t = grids[:, 1].view(M, 1) - boxes[:, 1].view(1, N) # M x N
             r = boxes[:, 2].view(1, N) - grids[:, 0].view(M, 1) # M x N
@@ -622,6 +622,7 @@ class CenterNet(nn.Module):
             reg_targets_per_im: M x N x 4
             size_ranges: M x 2
         '''
+        # (l+r)^2+(t+b)^2 开根号除以二 不知道算了个啥 对角线的一半？
         crit = ((reg_targets_per_im[:, :, :2] + \
             reg_targets_per_im[:, :, 2:])**2).sum(dim=2) ** 0.5 / 2 # M x N
         is_cared_in_the_level = (crit >= size_ranges[:, [0]]) & \
